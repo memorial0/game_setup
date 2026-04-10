@@ -34,29 +34,48 @@ body, html {
 
 /* Typography & Base */
 h1.logo {
-  font-size: 2.5rem;
+  font-size: 2.8rem;
   color: var(--primary);
-  text-shadow: 0 0 10px rgba(0, 255, 204, 0.5);
-  margin-bottom: 0.5rem;
+  text-shadow: 0 0 15px rgba(0, 255, 204, 0.4);
+  margin-bottom: 0.2rem;
+  text-align: center;
+  letter-spacing: 2px;
+}
+
+.subtitle {
+  font-size: 1.1rem;
+  margin-bottom: 1.5rem;
+  color: var(--text-muted);
+  text-align: center;
+  font-weight: 500;
+}
+
+.intro-description {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 25px;
+}
+
+.intro-description p {
+  font-size: 0.95rem;
+  line-height: 1.6;
+  margin-bottom: 10px;
+  color: var(--text-main);
   text-align: center;
 }
 
-h2 {
-  font-size: 1.5rem;
-  margin-bottom: 1rem;
-  color: #fff;
-  text-align: center;
+.intro-description p:last-child {
+  margin-bottom: 0;
 }
 
-h3 {
-  font-size: 1.2rem;
-  color: var(--primary);
-  margin-bottom: 0.5rem;
-}
-
-p {
-  line-height: 1.5;
-  margin-bottom: 1rem;
+.privacy-note {
+  font-size: 0.85rem !important;
+  color: var(--text-muted) !important;
+  margin-top: 15px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  padding-top: 10px;
 }
 
 /* Cards */

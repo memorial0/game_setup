@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 
 const STAGES = {
   INTRO: 'intro',
-  GUIDE_CONTROLS: 'guide_controls',
+  COMMON_INFO: 'common_info',
+  TUTORIAL_PLAY: 'tutorial_play',
   SESSION_INTRO: 'session_intro',
   SESSION_PLAY: 'session_play',
   SESSION_SURVEY: 'session_survey',
@@ -13,12 +14,22 @@ const STAGES = {
 const CONDITION_ORDER = ['fail', 'rewind'];
 const EMPTY_SURVEY = { interesting: 0, agency: 0, betterThanFail: 0, wantToPlay: 0, schadenfreude: 0 };
 
-// --- 고정 타임라인 데이터 ---
-const TIMELINE = [
-  { type: 'gate', t: 60, x1: 20, w1: 210, p1: 8, x2: 250, w2: 210, p2: 2, autoTarget: 355 }, // auto picks +2
-  { type: 'enemy', t: 180, x: 190, w: 100, h: 80, hp: 7 }, // passes with 12 power -> becomes 5
-  { type: 'gate', t: 300, x1: 20, w1: 210, p1: 10, x2: 250, w2: 210, p2: -3, autoTarget: 355 }, // auto picks -3 -> becomes 2
-  { type: 'enemy', t: 420, x: 140, w: 200, h: 100, hp: 15 } // FAILS (2 < 15)
+// --- 타임라인 데이터 ---
+const TUTORIAL_TIMELINE = [
+  { type: 'gate', t: 60, x1: 20, w1: 200, p1: 10, x2: 240, w2: 220, p2: 5 },
+  { type: 'enemy', t: 180, x: 140, w: 200, h: 80, hp: 5 },
+  { type: 'gate', t: 300, x1: 20, w1: 220, p1: 5, x2: 240, w2: 200, p2: 15 },
+  { type: 'enemy', t: 420, x: 100, w: 280, h: 80, hp: 10 }
+];
+
+const MAIN_TIMELINE = [
+  // 시작 파워 10
+  { type: 'gate', t: 60, x1: 20, w1: 100, p1: 12, x2: 130, w2: 330, p2: 5, autoTarget: 295 }, 
+  { type: 'enemy', t: 180, x: 140, w: 200, h: 80, hp: 8 }, 
+  { type: 'gate', t: 300, x1: 20, w1: 330, p1: 6, x2: 360, w2: 100, p2: 15, autoTarget: 185 }, 
+  { type: 'enemy', t: 420, x: 100, w: 280, h: 80, hp: 7 }, 
+  { type: 'gate', t: 540, x1: 20, w1: 100, p1: 18, x2: 130, w2: 330, p2: 6, autoTarget: 295 }, 
+  { type: 'enemy', t: 680, x: 90, w: 300, h: 100, hp: 14 } 
 ];
 
 const MicrogateExperiment = () => {
@@ -31,12 +42,14 @@ const MicrogateExperiment = () => {
   const [finalSurvey, setFinalSurvey] = useState({ mostAttractive: '', mostWantToInstall: '', reason: '' });
   const [gamePhase, setGamePhase] = useState('none'); 
   const [gameResult, setGameResult] = useState('');
+  const [isSlowMo, setIsSlowMo] = useState(false);
 
   const canvasRef = useRef(null);
   const reqRef = useRef(null);
   const gameState = useRef({
     ship: { x: 220, y: 550, w: 40, h: 40, power: 10 },
-    gates: [], enemies: [], particles: [], speed: 5, time: 0, eventIdx: 0, history: []
+    gates: [], enemies: [], particles: [], speed: 5, time: 0, eventIdx: 0, history: [],
+    flash: 0, slowFactor: 1, timeline: MAIN_TIMELINE
   });
   const input = useRef({ left: false, right: false, mouseX: null });
   const condition = CONDITION_ORDER[currentSessionIndex];
@@ -44,15 +57,18 @@ const MicrogateExperiment = () => {
   const handleStartIntro = () => {
     const id = pidInput.trim() || 'anonymous';
     setLog(prev => ({ ...prev, participantId: id, startedAt: new Date().toISOString() }));
-    setStage(STAGES.GUIDE_CONTROLS);
+    setStage(STAGES.COMMON_INFO);
   };
 
-  const initGame = () => {
+  const initGame = (isTutorial = false) => {
     gameState.current = {
       ship: { x: 220, y: 550, w: 40, h: 40, power: 10 },
-      gates: [], enemies: [], particles: [], speed: 5, time: 0, eventIdx: 0, history: []
+      gates: [], enemies: [], particles: [], speed: 5, time: 0, eventIdx: 0, history: [],
+      flash: 0, slowFactor: 1,
+      timeline: isTutorial ? TUTORIAL_TIMELINE : MAIN_TIMELINE
     };
-    setGamePhase('autoplay_fail_watch');
+    setIsSlowMo(false);
+    setGamePhase(isTutorial ? 'tutorial_play' : 'autoplay_fail_watch');
     input.current = { left: false, right: false, mouseX: null };
   };
 
@@ -60,6 +76,12 @@ const MicrogateExperiment = () => {
     if (gamePhase === 'ended') return;
     setGameResult(result);
     setGamePhase('ended');
+
+    if (stage === STAGES.TUTORIAL_PLAY) {
+      setTimeout(() => setStage(STAGES.SESSION_INTRO), 2000);
+      return;
+    }
+
     const duration = Date.now() - sessionStartTime;
     setLog(prev => {
       const newSessions = [...prev.sessions];
@@ -67,7 +89,7 @@ const MicrogateExperiment = () => {
       return { ...prev, sessions: newSessions };
     });
     setTimeout(() => setStage(STAGES.SESSION_SURVEY), 2500);
-  }, [sessionStartTime, currentSessionIndex, condition, gamePhase]);
+  }, [sessionStartTime, currentSessionIndex, condition, gamePhase, stage]);
 
   const updateGame = useCallback(() => {
     const state = gameState.current;
@@ -77,58 +99,71 @@ const MicrogateExperiment = () => {
     const { width, height } = canvas;
 
     // --- Timeline Spawner ---
-    if (state.eventIdx < TIMELINE.length && state.time >= TIMELINE[state.eventIdx].t) {
-      const ev = TIMELINE[state.eventIdx];
+    if (state.eventIdx < state.timeline.length && state.time >= state.timeline[state.eventIdx].t) {
+      const ev = state.timeline[state.eventIdx];
       if (ev.type === 'gate') state.gates.push({ ...ev, y: -100, passed: false });
       else if (ev.type === 'enemy') state.enemies.push({ ...ev, y: -100, dead: false });
       state.eventIdx++;
     }
 
+    const currentSpeed = state.speed * state.slowFactor;
+
     if (gamePhase === 'autoplay_fail_watch') {
-      state.time++;
-      // Auto-target logic based on the upcoming gate's targetX
+      state.time += state.slowFactor;
       const currentGate = state.gates.find(g => !g.passed && g.y < state.ship.y);
       if (currentGate && currentGate.autoTarget) {
-        state.ship.x += (currentGate.autoTarget - (state.ship.x + state.ship.w/2)) * 0.08;
+        state.ship.x += (currentGate.autoTarget - (state.ship.x + state.ship.w/2)) * 0.04;
+        state.ship.x += Math.sin(state.time * 0.1) * 0.5;
       }
 
       if (condition === 'rewind') {
         state.history.push({ 
-          ship: { ...state.ship }, 
-          gates: state.gates.map(g => ({ ...g })), 
-          enemies: state.enemies.map(e => ({ ...e })),
-          time: state.time, eventIdx: state.eventIdx
+          ship: { ...state.ship }, gates: state.gates.map(g => ({ ...g })), 
+          enemies: state.enemies.map(e => ({ ...e })), time: state.time, eventIdx: state.eventIdx
         });
-        if (state.history.length > 400) state.history.shift();
+        if (state.history.length > 500) state.history.shift();
       }
 
-      state.gates.forEach(g => g.y += state.speed);
-      state.enemies.forEach(e => e.y += state.speed);
+      state.gates.forEach(g => g.y += currentSpeed);
+      state.enemies.forEach(e => e.y += currentSpeed);
+
+      const imminentEnemy = state.enemies.find(e => !e.dead && e.y + e.h > state.ship.y - 80 && e.y < state.ship.y + state.ship.h);
+      if (imminentEnemy && state.ship.power < imminentEnemy.hp) {
+        state.slowFactor = Math.max(0.2, state.slowFactor - 0.05);
+        setIsSlowMo(true);
+      } else {
+        state.slowFactor = Math.min(1.0, state.slowFactor + 0.1);
+        setIsSlowMo(false);
+      }
 
       checkCollisions(state, () => {
+        state.flash = 1.0;
         if (condition === 'fail') endSession('fail', 0, null, false);
         else { setGamePhase('rewind_watch'); setTimeout(() => setGamePhase('rewind_back'), 1000); }
       });
 
-    } else if (gamePhase === 'rewind_rescue') {
+    } else if (gamePhase === 'rewind_rescue' || gamePhase === 'tutorial_play') {
       state.time++;
-      if (input.current.left && state.ship.x > 0) state.ship.x -= 8;
-      if (input.current.right && state.ship.x < width - state.ship.w) state.ship.x += 8;
+      state.slowFactor = 1.0;
       if (input.current.mouseX !== null) {
-        state.ship.x = input.current.mouseX - state.ship.w/2;
+        state.ship.x += (input.current.mouseX - state.ship.w/2 - state.ship.x) * 0.2;
         if (state.ship.x < 0) state.ship.x = 0;
         if (state.ship.x > width - state.ship.w) state.ship.x = width - state.ship.w;
       }
       state.gates.forEach(g => g.y += state.speed);
       state.enemies.forEach(e => e.y += state.speed);
       
-      checkCollisions(state, () => endSession('fail', 0, false, true));
-      // End game after final event passes
-      if (state.time > 650) endSession('success', 500, true, true);
+      checkCollisions(state, () => {
+        state.flash = 1.0;
+        if (gamePhase === 'tutorial_play') { state.ship.power = 10; return; } // No death in tutorial
+        endSession('fail', 0, false, true);
+      });
+      if (state.time > 550 && gamePhase === 'tutorial_play') endSession('success', 100, true, false);
+      if (state.time > 850 && gamePhase === 'rewind_rescue') endSession('success', 500, true, true);
 
     } else if (gamePhase === 'rewind_back') {
       if (state.history.length > 0) {
-        for(let i=0; i<6; i++) {
+        for(let i=0; i<10; i++) {
           if (state.history.length > 0) {
             const p = state.history.pop();
             Object.assign(state, p);
@@ -139,8 +174,6 @@ const MicrogateExperiment = () => {
 
     // --- Rendering ---
     ctx.fillStyle = '#071018'; ctx.fillRect(0, 0, width, height);
-    
-    // Draw Grid
     ctx.strokeStyle = 'rgba(0, 255, 204, 0.1)'; ctx.lineWidth = 1; ctx.beginPath();
     for (let i = 0; i < width; i += 40) { ctx.moveTo(i, 0); ctx.lineTo(i, height); }
     for (let i = (state.time * 2) % 40; i < height; i += 40) { ctx.moveTo(0, i); ctx.lineTo(width, i); }
@@ -152,34 +185,42 @@ const MicrogateExperiment = () => {
       ctx.fillRect(g.x1, g.y, g.w1, 40);
       ctx.fillStyle = g.p2 > 0 ? 'rgba(0, 255, 204, 0.4)' : 'rgba(255, 50, 50, 0.4)';
       ctx.fillRect(g.x2, g.y, g.w2, 40);
-      ctx.fillStyle = '#fff'; ctx.font = 'bold 18px monospace'; ctx.textAlign = 'center';
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 16px monospace'; ctx.textAlign = 'center';
       ctx.fillText(g.p1 > 0 ? `+${g.p1}` : g.p1, g.x1 + g.w1/2, g.y + 25);
       ctx.fillText(g.p2 > 0 ? `+${g.p2}` : g.p2, g.x2 + g.w2/2, g.y + 25);
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = (g.w1 < 120 || g.w2 < 120) ? 2 : 0;
+      if (g.w1 < 120) ctx.strokeRect(g.x1, g.y, g.w1, 40);
+      if (g.w2 < 120) ctx.strokeRect(g.x2, g.y, g.w2, 40);
     });
+
     state.enemies.forEach(e => {
       if (e.dead) return;
       ctx.fillStyle = '#ff3366'; ctx.fillRect(e.x, e.y, e.w, e.h);
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.strokeRect(e.x, e.y, e.w, e.h);
       ctx.fillStyle = '#fff'; ctx.font = 'bold 22px monospace'; ctx.textAlign = 'center';
       ctx.fillText(`HP ${e.hp}`, e.x + e.w/2, e.y + e.h/2 + 8);
     });
+
+    const vib = isSlowMo ? Math.random() * 4 - 2 : 0;
     ctx.fillStyle = '#00ffcc';
-    ctx.beginPath(); ctx.moveTo(state.ship.x + state.ship.w/2, state.ship.y);
-    ctx.lineTo(state.ship.x + state.ship.w, state.ship.y + state.ship.h);
-    ctx.lineTo(state.ship.x, state.ship.y + state.ship.h); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(state.ship.x + state.ship.w/2 + vib, state.ship.y);
+    ctx.lineTo(state.ship.x + state.ship.w + vib, state.ship.y + state.ship.h);
+    ctx.lineTo(state.ship.x + vib, state.ship.y + state.ship.h); ctx.fill();
     ctx.fillStyle = '#fff'; ctx.font = 'bold 20px monospace';
     ctx.fillText(state.ship.power, state.ship.x + state.ship.w/2, state.ship.y + state.ship.h + 25);
 
+    if (state.flash > 0) { ctx.fillStyle = `rgba(255, 0, 0, ${state.flash})`; ctx.fillRect(0, 0, width, height); state.flash -= 0.05; }
     if (gamePhase === 'rewind_watch' || gamePhase === 'rewind_back') {
-      ctx.fillStyle = 'rgba(255, 0, 80, 0.2)'; ctx.fillRect(0, 0, width, height);
-      ctx.fillStyle = '#fff'; ctx.font = 'bold 30px monospace'; ctx.textAlign = 'center';
-      ctx.fillText(gamePhase === 'rewind_watch' ? 'FAILURE' : '◀◀ REWIND', width/2, height/2);
+      ctx.fillStyle = 'rgba(255, 0, 80, 0.3)'; ctx.fillRect(0, 0, width, height);
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 40px monospace'; ctx.textAlign = 'center';
+      ctx.fillText(gamePhase === 'rewind_watch' ? 'COLLISION!' : '◀◀ REWIND', width/2, height/2);
     } else if (gamePhase === 'ended') {
-      ctx.fillStyle = 'rgba(0,0,0,0.8)'; ctx.fillRect(0,0,width,height);
+      ctx.fillStyle = 'rgba(0,0,0,0.85)'; ctx.fillRect(0,0,width,height);
       ctx.fillStyle = gameResult === 'success' ? '#00ffcc' : '#ff3366';
-      ctx.font = 'bold 40px sans-serif'; ctx.textAlign = 'center';
-      ctx.fillText(gameResult === 'success' ? 'SUCCESS' : 'FAILED', width/2, height/2);
+      ctx.font = 'bold 44px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(stage === STAGES.TUTORIAL_PLAY ? 'TUTORIAL END' : (gameResult === 'success' ? 'MISSION COMPLETE' : 'MISSION FAILED'), width/2, height/2);
     }
-  }, [gamePhase, condition, endSession, gameResult]);
+  }, [gamePhase, condition, endSession, gameResult, isSlowMo, stage]);
 
   const checkCollisions = (state, onFail) => {
     const s = state.ship;
@@ -199,7 +240,7 @@ const MicrogateExperiment = () => {
   };
 
   useEffect(() => {
-    if (stage === STAGES.SESSION_PLAY) {
+    if (stage === STAGES.SESSION_PLAY || stage === STAGES.TUTORIAL_PLAY) {
       const loop = () => { if (gamePhase !== 'ended') updateGame(); reqRef.current = requestAnimationFrame(loop); };
       reqRef.current = requestAnimationFrame(loop);
       return () => cancelAnimationFrame(reqRef.current);
@@ -207,8 +248,9 @@ const MicrogateExperiment = () => {
   }, [stage, gamePhase, updateGame]);
 
   useEffect(() => {
-    if (stage !== STAGES.SESSION_PLAY || gamePhase === 'autoplay_fail_watch' || gamePhase === 'ended') return;
+    if ((stage !== STAGES.SESSION_PLAY && stage !== STAGES.TUTORIAL_PLAY) || gamePhase === 'autoplay_fail_watch' || gamePhase === 'ended') return;
     const move = (e) => {
+      if (!canvasRef.current) return;
       const rect = canvasRef.current.getBoundingClientRect();
       const x = e.touches ? e.touches[0].clientX : e.clientX;
       input.current.mouseX = x - rect.left;
@@ -221,23 +263,44 @@ const MicrogateExperiment = () => {
     <div className="survey-q">
       <p>{question}</p>
       <div className="likert-group">
-        {[1, 2, 3, 4, 5].map(v => (
+        {[1, 2, 3, 4, 5, 6, 7].map(v => (
           <label key={v} className="likert-label">
             <input type="radio" checked={sessionSurvey[key] === v} onChange={() => setSessionSurvey(p => ({ ...p, [key]: v }))} />
             <span className="likert-circle">{v}</span>
           </label>
         ))}
       </div>
-      <div className="likert-text"><span>전혀 아니다</span><span>매우 그렇다</span></div>
+      <div className="likert-text">
+        <span>1 전혀 아니다</span>
+        <span>4 보통이다</span>
+        <span>7 매우 그렇다</span>
+      </div>
     </div>
   );
+
+  const exportCSV = () => {
+    const headers = ["participantId", "session", "condition", "result", "durationMs", "interesting", "agency", "betterThanFail", "wantToPlay", "schadenfreude"];
+    let rows = log.sessions.map(s => [
+      log.participantId, s.sessionIndex, s.condition, s.result, s.durationMs,
+      s.survey.interesting, s.survey.agency, s.survey.betterThanFail, s.survey.wantToPlay, s.survey.schadenfreude
+    ]);
+    const csvContent = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = `${log.participantId}_data.csv`; a.click();
+  };
 
   return (
     <div className="microgate-app">
       {stage === STAGES.INTRO && (
         <div className="card intro-card">
           <h1 className="logo">MICROGATE</h1>
-          <h2 className="subtitle">광고 형식 비교 연구</h2>
+          <p className="subtitle">광고 형식 비교 연구</p>
+          <div className="intro-description">
+            <p>본 프로토타입은 모바일 게임의 2가지 인터랙티브 광고 형식을 비교합니다.</p>
+            <p>총 2개의 세션을 체험하며, 각 세션 종료 후 설문에 응답하게 됩니다.</p>
+            <p className="privacy-note">※ 모든 데이터는 로컬에만 저장되며 외부로 전송되지 않습니다.</p>
+          </div>
           <div className="input-group">
             <label>참가자 ID</label>
             <input type="text" placeholder="P001" value={pidInput} onChange={e => setPidInput(e.target.value)} />
@@ -245,16 +308,33 @@ const MicrogateExperiment = () => {
           <button className="btn primary" onClick={handleStartIntro}>연구 시작</button>
         </div>
       )}
-      {stage === STAGES.GUIDE_CONTROLS && (
+
+      {stage === STAGES.COMMON_INFO && (
         <div className="card guide-card">
-          <h2>플레이 방법 안내</h2>
+          <h2>실험 안내</h2>
           <div className="guide-content">
-            <div className="guide-item"><strong>조작:</strong> 마우스/드래그로 좌우 이동</div>
-            <div className="guide-item"><strong>파워:</strong> 게이트를 통과해 적의 HP보다 높여야 합니다</div>
+            <p>이번 연구에서 참가자는 2가지 광고 형식을 체험하게 됩니다.</p>
+            <div className="guide-item">
+              <strong>형식 1: 실패 광고</strong>
+              <p>게임 플레이를 시청만 하는 조건입니다.</p>
+            </div>
+            <div className="guide-item">
+              <strong>형식 2: 리와인드 구출</strong>
+              <p>실패 장면을 본 뒤, 되감기 시점부터 직접 조작하여 결과를 바꾸는 조건입니다.</p>
+            </div>
+            <p>본 실험에 앞서 조작법을 익히기 위한 튜토리얼을 진행합니다.</p>
           </div>
-          <button className="btn primary" onClick={() => setStage(STAGES.SESSION_INTRO)}>세션 시작</button>
+          <button className="btn primary" onClick={() => { initGame(true); setStage(STAGES.TUTORIAL_PLAY); }}>튜토리얼 시작</button>
         </div>
       )}
+
+      {stage === STAGES.TUTORIAL_PLAY && (
+        <div className="game-container">
+          <div className="tutorial-overlay" style={{position:'absolute', top:'20px', left:'50%', transform:'translateX(-50%)', background:'rgba(0,0,0,0.7)', padding:'10px 20px', borderRadius:'20px', zIndex:10, pointerEvents:'none', width:'auto', textAlign:'center', color:'#00ffcc', border:'1px solid #00ffcc'}}>마우스/드래그로 좌우로 이동하여 파워를 높이세요!</div>
+          <canvas ref={canvasRef} width="480" height="720" className="game-canvas"></canvas>
+        </div>
+      )}
+
       {stage === STAGES.SESSION_INTRO && (
         <div className="card intro-card">
           <h2>세션 {currentSessionIndex + 1} / {CONDITION_ORDER.length}</h2>
@@ -262,15 +342,17 @@ const MicrogateExperiment = () => {
             {condition === 'fail' ? (
               <><h3>[ 형식 1: 실패 광고 ]</h3><p>이번 조건은 조작 없이 <strong>보기만</strong> 하시면 됩니다.</p></>
             ) : (
-              <><h3>[ 형식 2: 리와인드 구출 ]</h3><p>자동 장면 후 <strong>직접 조작할 수 있게</strong> 됩니다.</p></>
+              <><h3>[ 형식 2: 리와인드 구출 ]</h3><p>실패 장면 후 <strong>직접 조작하여 구출</strong>하십시오.</p></>
             )}
           </div>
-          <button className="btn primary" onClick={() => { initGame(); setSessionStartTime(Date.now()); setStage(STAGES.SESSION_PLAY); }}>시작</button>
+          <button className="btn primary" onClick={() => { initGame(false); setSessionStartTime(Date.now()); setStage(STAGES.SESSION_PLAY); }}>시작</button>
         </div>
       )}
-      {stage === STAGES.SESSION_PLAY && (
+
+      {(stage === STAGES.SESSION_PLAY) && (
         <div className="game-container"><canvas ref={canvasRef} width="480" height="720" className="game-canvas"></canvas></div>
       )}
+
       {stage === STAGES.SESSION_SURVEY && (
         <div className="card survey-card" key={`survey-session-${currentSessionIndex}`}>
           <h2>세션 설문 ({currentSessionIndex + 1}/{CONDITION_ORDER.length})</h2>
@@ -288,35 +370,60 @@ const MicrogateExperiment = () => {
               ns[currentSessionIndex].survey = { ...sessionSurvey }; 
               return { ...prev, sessions: ns }; 
             });
-            
             if (currentSessionIndex + 1 < CONDITION_ORDER.length) { 
               setCurrentSessionIndex(prev => prev + 1); 
-              setSessionSurvey(EMPTY_SURVEY); // Reset survey draft for next session
+              setSessionSurvey(EMPTY_SURVEY);
               setStage(STAGES.SESSION_INTRO); 
             }
             else setStage(STAGES.FINAL_SURVEY);
           }}>제출</button>
         </div>
       )}
+
       {stage === STAGES.FINAL_SURVEY && (
         <div className="card survey-card">
           <h2>최종 비교 설문</h2>
-          <div className="survey-q"><p>매력적인 형식은?</p><select value={finalSurvey.mostAttractive} onChange={e => setFinalSurvey(p => ({ ...p, mostAttractive: e.target.value }))}><option value="">선택</option><option value="fail">형식 1</option><option value="rewind">형식 2</option></select></div>
-          <div className="survey-q"><p>설치하고 싶은 형식은?</p><select value={finalSurvey.mostWantToInstall} onChange={e => setFinalSurvey(p => ({ ...p, mostWantToInstall: e.target.value }))}><option value="">선택</option><option value="fail">형식 1</option><option value="rewind">형식 2</option></select></div>
+          <div className="survey-list">
+            <div className="survey-q">
+              <p>1. 어느 형식이 가장 매력적이었나요?</p>
+              <select value={finalSurvey.mostAttractive} onChange={e => setFinalSurvey(p => ({ ...p, mostAttractive: e.target.value }))}>
+                <option value="">선택</option>
+                <option value="fail">실패 광고</option>
+                <option value="rewind">리와인드 구출</option>
+              </select>
+            </div>
+            <div className="survey-q">
+              <p>2. 어느 형식이 게임 설치 의향을 가장 높였나요?</p>
+              <select value={finalSurvey.mostWantToInstall} onChange={e => setFinalSurvey(p => ({ ...p, mostWantToInstall: e.target.value }))}>
+                <option value="">선택</option>
+                <option value="fail">실패 광고</option>
+                <option value="rewind">리와인드 구출</option>
+              </select>
+            </div>
+            <div className="survey-q">
+              <p>3. 이유가 있다면? (선택사항)</p>
+              <textarea placeholder="자유롭게 입력해 주세요." value={finalSurvey.reason} onChange={e => setFinalSurvey(p => ({ ...p, reason: e.target.value }))} style={{height:'100px'}}></textarea>
+            </div>
+          </div>
           <button className="btn primary" onClick={() => {
             if (!finalSurvey.mostAttractive || !finalSurvey.mostWantToInstall) return alert("필수 항목을 선택해 주세요.");
             setLog(prev => ({ ...prev, finalSurvey, completed: true })); setStage(STAGES.COMPLETION);
           }}>완료</button>
         </div>
       )}
+
       {stage === STAGES.COMPLETION && (
         <div className="card completion-card">
           <h2>실험 완료</h2>
-          <button className="btn outline" onClick={() => {
-            const blob = new Blob([JSON.stringify(log, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a'); a.href = url; a.download = `${log.participantId || 'anon'}_data.json`; a.click();
-          }}>데이터 저장</button>
+          <p style={{textAlign:'center', marginBottom:'20px'}}>참여해주셔서 감사합니다.</p>
+          <div className="btn-group">
+            <button className="btn outline" onClick={() => {
+              const blob = new Blob([JSON.stringify(log, null, 2)], { type: 'application/json' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a'); a.href = url; a.download = `${log.participantId}_data.json`; a.click();
+            }}>JSON 저장</button>
+            <button className="btn primary" onClick={exportCSV}>CSV 저장</button>
+          </div>
         </div>
       )}
     </div>
