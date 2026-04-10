@@ -330,15 +330,45 @@ const MicrogateExperiment = () => {
   );
 
   const exportCSV = () => {
-    const headers = ["participantId", "session", "condition", "result", "durationMs", "interesting", "agency", "betterThanFail", "wantToPlay", "schadenfreude"];
-    let rows = log.sessions.map(s => [
-      log.participantId, s.sessionIndex, s.condition, s.result, s.durationMs,
-      s.survey.interesting, s.survey.agency, s.survey.betterThanFail, s.survey.wantToPlay, s.survey.schadenfreude
-    ]);
+    // ID 포맷팅 (숫자만 있으면 P000 형식으로, 아니면 그대로)
+    const rawId = log.participantId;
+    const formattedId = /^\d+$/.test(rawId) ? `P${rawId.padStart(3, '0')}` : rawId;
+
+    const headers = [
+      "participantId", "session", "condition", "result", "durationMs", 
+      "q1_interesting", "q2_agency", "q3_betterThanFail", "q4_wantToPlay", "q5_schadenfreude",
+      "final_attractive", "final_install", "final_reason"
+    ];
+
+    let rows = log.sessions.map(s => {
+      // 결과 상태 명확화
+      let detailedResult = s.result;
+      if (s.condition === 'fail') detailedResult = 'scripted_fail';
+      else if (s.condition === 'rewind') {
+        detailedResult = s.result === 'success' ? 'rescue_success' : 'rescue_fail';
+      }
+
+      return [
+        formattedId,
+        s.sessionIndex,
+        s.condition,
+        detailedResult,
+        s.durationMs,
+        s.survey.interesting,
+        s.survey.agency,
+        s.survey.betterThanFail,
+        s.survey.wantToPlay,
+        s.survey.schadenfreude,
+        log.finalSurvey.mostAttractive || "",
+        log.finalSurvey.mostWantToInstall || "",
+        `"${(log.finalSurvey.reason || "").replace(/"/g, '""')}"` // CSV 쉼표/따옴표 처리
+      ];
+    });
+
     const csvContent = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' }); // Excel 한글 깨짐 방지 BOM 추가
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = `${log.participantId}_data.csv`; a.click();
+    const a = document.createElement('a'); a.href = url; a.download = `${formattedId}_full_data.csv`; a.click();
   };
 
   return (
