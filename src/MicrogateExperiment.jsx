@@ -11,6 +11,7 @@ const STAGES = {
 };
 
 const CONDITION_ORDER = ['fail', 'rewind'];
+const EMPTY_SURVEY = { interesting: 0, agency: 0, betterThanFail: 0, wantToPlay: 0, schadenfreude: 0 };
 
 // --- 고정 타임라인 데이터 ---
 const TIMELINE = [
@@ -26,7 +27,7 @@ const MicrogateExperiment = () => {
   const [pidInput, setPidInput] = useState('');
   const [currentSessionIndex, setCurrentSessionIndex] = useState(0);
   const [sessionStartTime, setSessionStartTime] = useState(0);
-  const [sessionSurvey, setSessionSurvey] = useState({ interesting: 0, agency: 0, betterThanFail: 0, wantToPlay: 0, schadenfreude: 0 });
+  const [sessionSurvey, setSessionSurvey] = useState(EMPTY_SURVEY);
   const [finalSurvey, setFinalSurvey] = useState({ mostAttractive: '', mostWantToInstall: '', reason: '' });
   const [gamePhase, setGamePhase] = useState('none'); 
   const [gameResult, setGameResult] = useState('');
@@ -256,7 +257,7 @@ const MicrogateExperiment = () => {
       )}
       {stage === STAGES.SESSION_INTRO && (
         <div className="card intro-card">
-          <h2>세션 {currentSessionIndex + 1} / 2</h2>
+          <h2>세션 {currentSessionIndex + 1} / {CONDITION_ORDER.length}</h2>
           <div className="cond-display">
             {condition === 'fail' ? (
               <><h3>[ 형식 1: 실패 광고 ]</h3><p>이번 조건은 조작 없이 <strong>보기만</strong> 하시면 됩니다.</p></>
@@ -271,8 +272,8 @@ const MicrogateExperiment = () => {
         <div className="game-container"><canvas ref={canvasRef} width="480" height="720" className="game-canvas"></canvas></div>
       )}
       {stage === STAGES.SESSION_SURVEY && (
-        <div className="card survey-card">
-          <h2>세션 설문 ({currentSessionIndex + 1}/2)</h2>
+        <div className="card survey-card" key={`survey-session-${currentSessionIndex}`}>
+          <h2>세션 설문 ({currentSessionIndex + 1}/{CONDITION_ORDER.length})</h2>
           <div className="survey-list">
             {renderLikert('interesting', '1. 이 광고 형식은 흥미로웠다.')}
             {renderLikert('agency', '2. 결과에 내가 영향을 줄 수 있다고 느꼈다.')}
@@ -287,7 +288,12 @@ const MicrogateExperiment = () => {
               ns[currentSessionIndex].survey = { ...sessionSurvey }; 
               return { ...prev, sessions: ns }; 
             });
-            if (currentSessionIndex + 1 < 2) { setCurrentSessionIndex(1); setStage(STAGES.SESSION_INTRO); }
+            
+            if (currentSessionIndex + 1 < CONDITION_ORDER.length) { 
+              setCurrentSessionIndex(prev => prev + 1); 
+              setSessionSurvey(EMPTY_SURVEY); // Reset survey draft for next session
+              setStage(STAGES.SESSION_INTRO); 
+            }
             else setStage(STAGES.FINAL_SURVEY);
           }}>제출</button>
         </div>
