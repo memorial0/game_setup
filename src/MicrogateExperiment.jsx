@@ -16,20 +16,25 @@ const EMPTY_SURVEY = { interesting: 0, agency: 0, betterThanFail: 0, wantToPlay:
 
 // --- 타임라인 데이터 ---
 const TUTORIAL_TIMELINE = [
-  { type: 'gate', t: 60, x1: 20, w1: 200, p1: 10, x2: 240, w2: 220, p2: 5 },
-  { type: 'enemy', t: 180, x: 140, w: 200, h: 80, hp: 5 },
-  { type: 'gate', t: 300, x1: 20, w1: 220, p1: 5, x2: 240, w2: 200, p2: 15 },
-  { type: 'enemy', t: 420, x: 100, w: 280, h: 80, hp: 10 }
+  { type: 'gate', t: 40, x1: 20, w1: 200, p1: 10, x2: 240, w2: 220, p2: 5 },
+  { type: 'enemy', t: 120, x: 140, w: 200, h: 60, hp: 3 },
+  { type: 'gate', t: 200, x1: 20, w1: 220, p1: 5, x2: 240, w2: 200, p2: 15 },
+  { type: 'enemy', t: 300, x: 80, w: 320, h: 80, hp: 8 }
 ];
 
 const MAIN_TIMELINE = [
   // 시작 파워 10
-  { type: 'gate', t: 60, x1: 20, w1: 100, p1: 12, x2: 130, w2: 330, p2: 5, autoTarget: 295 }, 
-  { type: 'enemy', t: 180, x: 140, w: 200, h: 80, hp: 8 }, 
-  { type: 'gate', t: 300, x1: 20, w1: 330, p1: 6, x2: 360, w2: 100, p2: 15, autoTarget: 185 }, 
-  { type: 'enemy', t: 420, x: 100, w: 280, h: 80, hp: 7 }, 
-  { type: 'gate', t: 540, x1: 20, w1: 100, p1: 18, x2: 130, w2: 330, p2: 6, autoTarget: 295 }, 
-  { type: 'enemy', t: 680, x: 90, w: 300, h: 100, hp: 14 } 
+  { type: 'gate', t: 40, x1: 20, w1: 100, p1: 12, x2: 130, w2: 330, p2: 5, autoTarget: 295 }, // 자동:+5 -> 15
+  { type: 'enemy', t: 110, x: 300, w: 100, h: 50, hp: 3 }, // 보조 적: -3 -> 12
+  { type: 'enemy', t: 170, x: 140, w: 200, h: 80, hp: 7 }, // 메인 적: -7 -> 5
+  { type: 'gate', t: 240, x1: 300, w1: 150, p1: 3, x2: 20, w2: 270, p2: 1, autoTarget: 155 }, // 보조 게이트: +1 -> 6
+  { type: 'gate', t: 310, x1: 20, w1: 330, p1: 6, x2: 360, w2: 100, p2: 15, autoTarget: 185 }, // 메인 게이트: +6 -> 12
+  { type: 'enemy', t: 380, x: 40, w: 120, h: 50, hp: 4 }, // 보조 적: -4 -> 8
+  { type: 'enemy', t: 450, x: 100, w: 280, h: 80, hp: 6 }, // 메인 적: -6 -> 2
+  { type: 'gate', t: 520, x1: 200, w1: 260, p1: 4, x2: 20, w2: 170, p2: 2, autoTarget: 105 }, // 보조 게이트: +2 -> 4
+  { type: 'gate', t: 590, x1: 20, w1: 100, p1: 18, x2: 130, w2: 330, p2: 7, autoTarget: 295 }, // 메인 게이트: +7 -> 11
+  { type: 'enemy', t: 660, x: 50, w: 150, h: 60, hp: 5 }, // 보조 적: -5 -> 6
+  { type: 'enemy', t: 740, x: 90, w: 300, h: 100, hp: 14 } // 최종 적: HP 14 vs Power 6 -> 실패!
 ];
 
 const MicrogateExperiment = () => {
@@ -48,7 +53,7 @@ const MicrogateExperiment = () => {
   const reqRef = useRef(null);
   const gameState = useRef({
     ship: { x: 220, y: 550, w: 40, h: 40, power: 10 },
-    gates: [], enemies: [], particles: [], speed: 5, time: 0, eventIdx: 0, history: [],
+    gates: [], enemies: [], stars: [], particles: [], speed: 5, time: 0, eventIdx: 0, history: [],
     flash: 0, slowFactor: 1, timeline: MAIN_TIMELINE
   });
   const input = useRef({ left: false, right: false, mouseX: null });
@@ -63,7 +68,8 @@ const MicrogateExperiment = () => {
   const initGame = (isTutorial = false) => {
     gameState.current = {
       ship: { x: 220, y: 550, w: 40, h: 40, power: 10 },
-      gates: [], enemies: [], particles: [], speed: 5, time: 0, eventIdx: 0, history: [],
+      gates: [], enemies: [], stars: Array.from({length: 30}, () => ({x: Math.random()*480, y: Math.random()*720, s: 1+Math.random()*3})),
+      particles: [], speed: 5, time: 0, eventIdx: 0, history: [],
       flash: 0, slowFactor: 1,
       timeline: isTutorial ? TUTORIAL_TIMELINE : MAIN_TIMELINE
     };
@@ -101,12 +107,18 @@ const MicrogateExperiment = () => {
     // --- Timeline Spawner ---
     if (state.eventIdx < state.timeline.length && state.time >= state.timeline[state.eventIdx].t) {
       const ev = state.timeline[state.eventIdx];
-      if (ev.type === 'gate') state.gates.push({ ...ev, y: -100, passed: false });
-      else if (ev.type === 'enemy') state.enemies.push({ ...ev, y: -100, dead: false });
+      if (ev.type === 'gate') state.gates.push({ ...ev, y: -120, passed: false }); // 스폰 위치 약간 위로
+      else if (ev.type === 'enemy') state.enemies.push({ ...ev, y: -120, dead: false });
       state.eventIdx++;
     }
 
     const currentSpeed = state.speed * state.slowFactor;
+
+    // Move Background Stars
+    state.stars.forEach(s => {
+      s.y += currentSpeed * s.s * 0.5;
+      if (s.y > height) { s.y = -10; s.x = Math.random() * width; }
+    });
 
     if (gamePhase === 'autoplay_fail_watch') {
       state.time += state.slowFactor;
@@ -158,8 +170,8 @@ const MicrogateExperiment = () => {
         if (gamePhase === 'tutorial_play') { state.ship.power = 10; return; } // No death in tutorial
         endSession('fail', 0, false, true);
       });
-      if (state.time > 550 && gamePhase === 'tutorial_play') endSession('success', 100, true, false);
-      if (state.time > 850 && gamePhase === 'rewind_rescue') endSession('success', 500, true, true);
+      if (state.time > 450 && gamePhase === 'tutorial_play') endSession('success', 100, true, false);
+      if (state.time > 950 && gamePhase === 'rewind_rescue') endSession('success', 500, true, true);
 
     } else if (gamePhase === 'rewind_back') {
       if (state.history.length > 0) {
@@ -174,7 +186,17 @@ const MicrogateExperiment = () => {
 
     // --- Rendering ---
     ctx.fillStyle = '#071018'; ctx.fillRect(0, 0, width, height);
-    ctx.strokeStyle = 'rgba(0, 255, 204, 0.1)'; ctx.lineWidth = 1; ctx.beginPath();
+
+    // Draw Stars
+    ctx.fillStyle = '#fff';
+    state.stars.forEach(s => {
+      ctx.globalAlpha = s.s / 4;
+      ctx.fillRect(s.x, s.y, s.s, s.s);
+    });
+    ctx.globalAlpha = 1.0;
+    
+    // Draw Grid
+    ctx.strokeStyle = 'rgba(0, 255, 204, 0.05)'; ctx.lineWidth = 1; ctx.beginPath();
     for (let i = 0; i < width; i += 40) { ctx.moveTo(i, 0); ctx.lineTo(i, height); }
     for (let i = (state.time * 2) % 40; i < height; i += 40) { ctx.moveTo(0, i); ctx.lineTo(width, i); }
     ctx.stroke();
@@ -197,10 +219,11 @@ const MicrogateExperiment = () => {
       if (e.dead) return;
       ctx.fillStyle = '#ff3366'; ctx.fillRect(e.x, e.y, e.w, e.h);
       ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.strokeRect(e.x, e.y, e.w, e.h);
-      ctx.fillStyle = '#fff'; ctx.font = 'bold 22px monospace'; ctx.textAlign = 'center';
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 18px monospace'; ctx.textAlign = 'center';
       ctx.fillText(`HP ${e.hp}`, e.x + e.w/2, e.y + e.h/2 + 8);
     });
 
+    // Ship with small vibration if slow-mo
     const vib = isSlowMo ? Math.random() * 4 - 2 : 0;
     ctx.fillStyle = '#00ffcc';
     ctx.beginPath(); ctx.moveTo(state.ship.x + state.ship.w/2 + vib, state.ship.y);
@@ -209,16 +232,44 @@ const MicrogateExperiment = () => {
     ctx.fillStyle = '#fff'; ctx.font = 'bold 20px monospace';
     ctx.fillText(state.ship.power, state.ship.x + state.ship.w/2, state.ship.y + state.ship.h + 25);
 
-    if (state.flash > 0) { ctx.fillStyle = `rgba(255, 0, 0, ${state.flash})`; ctx.fillRect(0, 0, width, height); state.flash -= 0.05; }
+    // --- Failure/Overlay Effects ---
+    
+    // 1. Initial Collision Flash (Burgundy instead of Bright Red)
+    if (state.flash > 0) {
+      ctx.fillStyle = `rgba(120, 0, 30, ${state.flash * 0.7})`;
+      ctx.fillRect(0, 0, width, height);
+      state.flash -= 0.04;
+    }
+
+    // 2. Rewind/Failure Vignette Overlay
     if (gamePhase === 'rewind_watch' || gamePhase === 'rewind_back') {
-      ctx.fillStyle = 'rgba(255, 0, 80, 0.3)'; ctx.fillRect(0, 0, width, height);
-      ctx.fillStyle = '#fff'; ctx.font = 'bold 40px monospace'; ctx.textAlign = 'center';
+      const grad = ctx.createRadialGradient(width/2, height/2, 100, width/2, height/2, width);
+      grad.addColorStop(0, 'rgba(10, 15, 25, 0.4)'); // Center: Dark & Clear
+      grad.addColorStop(1, 'rgba(80, 0, 20, 0.6)');  // Edge: Deep Wine
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, width, height);
+
+      ctx.fillStyle = '#ffeef0'; // Soft pinkish white
+      ctx.font = 'bold 40px monospace'; ctx.textAlign = 'center';
+      ctx.shadowColor = 'rgba(255, 50, 80, 0.5)'; ctx.shadowBlur = 15;
       ctx.fillText(gamePhase === 'rewind_watch' ? 'COLLISION!' : '◀◀ REWIND', width/2, height/2);
-    } else if (gamePhase === 'ended') {
-      ctx.fillStyle = 'rgba(0,0,0,0.85)'; ctx.fillRect(0,0,width,height);
-      ctx.fillStyle = gameResult === 'success' ? '#00ffcc' : '#ff3366';
+      ctx.shadowBlur = 0;
+    } 
+    // 3. Final Result Screen
+    else if (gamePhase === 'ended') {
+      ctx.fillStyle = 'rgba(5, 10, 20, 0.85)';
+      ctx.fillRect(0, 0, width, height);
+      
+      const isSuccess = gameResult === 'success';
+      ctx.fillStyle = isSuccess ? '#00ffcc' : '#ff5577';
+      ctx.shadowColor = isSuccess ? 'rgba(0, 255, 204, 0.5)' : 'rgba(255, 80, 110, 0.5)';
+      ctx.shadowBlur = 20;
       ctx.font = 'bold 44px sans-serif'; ctx.textAlign = 'center';
-      ctx.fillText(stage === STAGES.TUTORIAL_PLAY ? 'TUTORIAL END' : (gameResult === 'success' ? 'MISSION COMPLETE' : 'MISSION FAILED'), width/2, height/2);
+      ctx.fillText(stage === STAGES.TUTORIAL_PLAY ? 'TUTORIAL END' : (isSuccess ? 'MISSION COMPLETE' : 'MISSION FAILED'), width/2, height/2);
+      ctx.shadowBlur = 0;
+      
+      ctx.font = '20px monospace'; ctx.fillStyle = '#94a3b8';
+      ctx.fillText(isSuccess ? '모든 적을 격파했습니다' : '파워가 부족합니다', width/2, height/2 + 60);
     }
   }, [gamePhase, condition, endSession, gameResult, isSlowMo, stage]);
 
