@@ -1,5 +1,86 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 
+// --- 사운드 매니저 (Web Audio API) ---
+const createSoundManager = () => {
+  let ctx = null;
+
+  const init = () => {
+    if (!ctx) {
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (ctx.state === 'suspended') {
+      ctx.resume();
+    }
+  };
+
+  const playOsc = (freq, type, duration, volume, decay = 0.1) => {
+    if (!ctx) return;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, ctx.currentTime);
+    gain.gain.setValueAtTime(volume, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + duration);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + duration);
+  };
+
+  return {
+    init,
+    playGate: (isPositive) => {
+      init();
+      if (isPositive) {
+        playOsc(660, 'sine', 0.1, 0.15);
+        setTimeout(() => playOsc(880, 'sine', 0.1, 0.1), 50);
+      } else {
+        playOsc(220, 'sine', 0.15, 0.2);
+      }
+    },
+    playCollision: () => {
+      init();
+      // Noise-like sound using square wave and quick decay
+      playOsc(110, 'square', 0.3, 0.2);
+      playOsc(55, 'sawtooth', 0.4, 0.2);
+    },
+    playSuccess: () => {
+      init();
+      const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+      notes.forEach((freq, i) => {
+        setTimeout(() => playOsc(freq, 'sine', 0.4, 0.15 - i * 0.02), i * 100);
+      });
+    },
+    playClick: () => {
+      init();
+      playOsc(1200, 'sine', 0.05, 0.1);
+    },
+    playRewind: () => {
+      init();
+      // Series of rising chirps
+      for (let i = 0; i < 5; i++) {
+        setTimeout(() => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.frequency.setValueAtTime(100 + i * 200, ctx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(1000 + i * 200, ctx.currentTime + 0.1);
+          gain.gain.setValueAtTime(0.1, ctx.currentTime);
+          gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.1);
+          osc.connect(gain); gain.connect(ctx.destination);
+          osc.start(); osc.stop(ctx.currentTime + 0.1);
+        }, i * 60);
+      }
+    },
+    playIntervention: () => {
+      init();
+      playOsc(440, 'sine', 0.2, 0.2);
+      setTimeout(() => playOsc(880, 'sine', 0.4, 0.15), 100);
+    }
+  };
+};
+
+const soundManager = createSoundManager();
+
 const STAGES = {
   INTRO: 'intro',
   COMMON_INFO: 'common_info',
@@ -15,7 +96,6 @@ const CONDITION_ORDER = ['fail', 'rewind'];
 const EMPTY_SURVEY = { interesting: 0, agency: 0, betterThanFail: 0, wantToPlay: 0, schadenfreude: 0 };
 
 // --- 타임라인 데이터 ---
-// 튜토리얼 게이트 간격을 80px로 확대 (중앙 240 기준 좌우 분리)
 const TUTORIAL_TIMELINE = [
   { type: 'gate', t: 40, x1: 20, w1: 180, p1: 10, x2: 280, w2: 180, p2: 5 },
   { type: 'enemy', t: 120, x: 140, w: 200, h: 60, hp: 3 },
@@ -31,10 +111,14 @@ const MAIN_TIMELINE = [
   { type: 'gate', t: 310, x1: 20, w1: 330, p1: 6, x2: 360, w2: 100, p2: 15, autoTarget: 185 },
   { type: 'enemy', t: 380, x: 40, w: 120, h: 50, hp: 4 },
   { type: 'enemy', t: 450, x: 100, w: 280, h: 80, hp: 6 },
-  { type: 'gate', t: 520, x1: 200, w1: 260, p1: 4, x2: 20, w2: 170, p2: 2, autoTarget: 105 },
-  { type: 'gate', t: 590, x1: 20, w1: 100, p1: 18, x2: 130, w2: 330, p2: 7, autoTarget: 295 },
-  { type: 'enemy', t: 660, x: 50, w: 150, h: 60, hp: 5 },
-  { type: 'enemy', t: 740, x: 90, w: 300, h: 100, hp: 14 }
+  { type: 'gate', t: 520, x1: 200, w1: 260, p1: 10, x2: 20, w2: 170, p2: 2, autoTarget: 105 },
+  { type: 'gate', t: 600, x1: 20, w1: 150, p1: 15, x2: 180, w2: 280, p2: 5, autoTarget: 320 },
+  { type: 'enemy', t: 680, x: 50, w: 150, h: 60, hp: 8 },
+  { type: 'enemy', t: 760, x: 90, w: 300, h: 100, hp: 15 },
+  { type: 'gate', t: 850, x1: 20, w1: 210, p1: 20, x2: 250, w2: 210, p2: 10 }, 
+  { type: 'enemy', t: 940, x: 140, w: 200, h: 70, hp: 12 }, 
+  { type: 'gate', t: 1020, x1: 20, w1: 100, p1: 25, x2: 130, w2: 330, p2: 5 }, 
+  { type: 'enemy', t: 1120, x: 40, w: 400, h: 100, hp: 20 }
 ];
 
 const MicrogateExperiment = () => {
@@ -55,12 +139,14 @@ const MicrogateExperiment = () => {
     ship: { x: 220, y: 550, w: 40, h: 40, power: 10, isDead: false, vx: 0, vy: 0, ang: 0, av: 0 },
     gates: [], enemies: [], stars: [], particles: [], rings: [], speed: 5, time: 0, eventIdx: 0, history: [],
     flash: 0, slowFactor: 1, timeline: MAIN_TIMELINE,
-    shake: 0, resultAnim: { type: '', t: 0 }, vignette: 0, failReason: ''
+    shake: 0, resultAnim: { type: '', t: 0 }, vignette: 0, failReason: '', isEnding: false
   });
   const input = useRef({ left: false, right: false, mouseX: null });
   const condition = CONDITION_ORDER[currentSessionIndex];
 
   const handleStartIntro = () => {
+    soundManager.init();
+    soundManager.playClick();
     const id = pidInput.trim() || 'anonymous';
     setLog(prev => ({ ...prev, participantId: id, startedAt: new Date().toISOString() }));
     setStage(STAGES.COMMON_INFO);
@@ -73,7 +159,7 @@ const MicrogateExperiment = () => {
       particles: [], rings: [], speed: 5, time: 0, eventIdx: 0, history: [],
       flash: 0, slowFactor: 1,
       timeline: isTutorial ? TUTORIAL_TIMELINE : MAIN_TIMELINE,
-      shake: 0, resultAnim: { type: '', t: 0 }, vignette: 0, failReason: ''
+      shake: 0, resultAnim: { type: '', t: 0 }, vignette: 0, failReason: '', isEnding: false
     };
     setIsSlowMo(false);
     setGamePhase(isTutorial ? 'tutorial_play' : 'autoplay_fail_watch');
@@ -92,49 +178,40 @@ const MicrogateExperiment = () => {
   };
 
   const endSession = useCallback((result, score, rescue, rewind) => {
-    if (gamePhase === 'ended' && !gameState.current.ship.isDead) return;
+    // Synchronous guard to prevent double calls during stage transition
+    if (gameState.current.isEnding) return;
+    gameState.current.isEnding = true;
     
     const state = gameState.current;
+    const currentStage = stage; // Capture stage at call time
+
     if (result === 'success') {
-      state.resultAnim = { type: rescue && rewind ? '성공' : '구출 성공', t: 1.0 };
-      state.vignette = -2.5; 
-      state.flash = 1.0;
-      state.shake = 12;
-      state.ship.vy = -18;
-      state.ship.vx = 0;
-      
+      soundManager.playSuccess();
+      state.resultAnim = { type: rescue && rewind ? '개입 성공' : '구출 성공', t: 1.0 };
+      state.vignette = -2.5; state.flash = 1.0; state.shake = 12;
+      state.ship.vy = -18; state.ship.vx = 0;
       const particleColor = '#00ffff';
       spawnParticles(state.ship.x + state.ship.w/2, state.ship.y + state.ship.h/2, 100, particleColor, 18, 6);
-      
       for(let i=0; i<4; i++) {
         setTimeout(() => {
           state.rings.push({ x: state.ship.x + state.ship.w/2, y: state.ship.y + state.ship.h/2, r: 10, life: 1.0, speed: 12 + i*4, color: i % 2 === 0 ? '#ffffff' : '#00ffff' });
         }, i * 100);
       }
-
       if (rescue && rewind) {
-        state.failReason = "구출 성공!";
-        setTimeout(() => {
-          spawnParticles(state.ship.x + state.ship.w/2, state.ship.y + state.ship.h/2, 150, '#ffffff', 25, 4);
-          state.flash = 1.0;
-          state.shake = 25;
-          state.vignette = -3.0;
-        }, 300);
-      } else {
-        state.failReason = "위험 구간을 돌파했습니다!";
-      }
-
-      setGameResult(result);
-      setGamePhase('ended');
+        state.failReason = "직접 개입해 결과를 바꿨습니다!";
+        setTimeout(() => { spawnParticles(state.ship.x + state.ship.w/2, state.ship.y + state.ship.h/2, 150, '#ffffff', 25, 4); state.flash = 1.0; state.shake = 25; state.vignette = -3.0; }, 300);
+      } else { state.failReason = "위험 구간을 돌파했습니다!"; }
+      setGameResult(result); setGamePhase('ended');
     } else {
-      state.resultAnim = { type: 'FAILURE', t: 1.0 };
-      state.vignette = 1.0;
-      setGameResult(result);
+      state.resultAnim = { type: 'FAILURE', t: 1.0 }; state.vignette = 1.0; setGameResult(result);
       setTimeout(() => { setGamePhase('ended'); }, 800);
     }
 
-    if (stage === STAGES.TUTORIAL_PLAY) {
-      setTimeout(() => setStage(STAGES.SESSION_INTRO), 2000);
+    // Stage transition logic
+    if (currentStage === STAGES.TUTORIAL_PLAY) {
+      setTimeout(() => {
+        setStage(STAGES.SESSION_INTRO);
+      }, 2500);
       return;
     }
 
@@ -146,8 +223,10 @@ const MicrogateExperiment = () => {
     });
     
     const delay = result === 'success' ? 3500 : 2500;
-    setTimeout(() => setStage(STAGES.SESSION_SURVEY), delay);
-  }, [sessionStartTime, currentSessionIndex, condition, gamePhase, stage]);
+    setTimeout(() => {
+      setStage(STAGES.SESSION_SURVEY);
+    }, delay);
+  }, [sessionStartTime, currentSessionIndex, condition, stage]);
 
   const updateGame = useCallback(() => {
     const state = gameState.current;
@@ -164,10 +243,8 @@ const MicrogateExperiment = () => {
     }
 
     const currentSpeed = state.speed * state.slowFactor;
-
     state.particles = state.particles.filter(p => p.life > 0);
     state.particles.forEach(p => { p.x += p.vx; p.y += p.vy; p.life -= p.decay; });
-
     state.rings = state.rings.filter(r => r.life > 0);
     state.rings.forEach(r => { r.r += r.speed || 5; r.life -= 0.02; });
 
@@ -185,7 +262,7 @@ const MicrogateExperiment = () => {
       state.ship.y += state.ship.vy; state.ship.vy *= 0.96; state.time += 4;
     }
 
-    if ((gamePhase === 'autoplay_fail_watch' || gamePhase === 'rewind_rescue' || gamePhase === 'tutorial_play') && !state.ship.isDead) {
+    if ((gamePhase === 'autoplay_fail_watch' || gamePhase === 'rewind_rescue' || gamePhase === 'tutorial_play') && !state.ship.isDead && !state.isEnding) {
       if (gamePhase === 'autoplay_fail_watch') {
         state.time += state.slowFactor;
         const currentGate = state.gates.find(g => !g.passed && g.y < state.ship.y);
@@ -195,7 +272,7 @@ const MicrogateExperiment = () => {
         }
         if (condition === 'rewind') {
           state.history.push({ ship: { ...state.ship }, gates: state.gates.map(g => ({ ...g })), enemies: state.enemies.map(e => ({ ...e })), time: state.time, eventIdx: state.eventIdx });
-          if (state.history.length > 500) state.history.shift();
+          if (state.history.length > 800) state.history.shift();
         }
         const imminentEnemy = state.enemies.find(e => !e.dead && e.y + e.h > state.ship.y - 80 && e.y < state.ship.y + state.ship.h);
         if (imminentEnemy && state.ship.power < imminentEnemy.hp) {
@@ -215,21 +292,26 @@ const MicrogateExperiment = () => {
         state.flash = 0.8; state.shake = 35; state.vignette = 1.0; state.failReason = reason;
         spawnParticles(state.ship.x + state.ship.w/2, state.ship.y + state.ship.h/2, 35, '#ffcc33', 12, 4);
         spawnParticles(state.ship.x + state.ship.w/2, state.ship.y + state.ship.h/2, 25, '#ff3366', 8, 6);
-        if (condition === 'fail' || gamePhase === 'rewind_rescue' || gamePhase === 'tutorial_play') { endSession('fail', 0, gamePhase === 'rewind_rescue', condition === 'rewind'); }
-        else { setTimeout(() => { if (gamePhase !== 'ended') { setGamePhase('rewind_watch'); setTimeout(() => setGamePhase('rewind_back'), 1000); } }, 800); }
+        soundManager.playCollision();
+
+        if (condition === 'fail' || gamePhase === 'rewind_rescue' || stage === STAGES.TUTORIAL_PLAY) { endSession('fail', 0, gamePhase === 'rewind_rescue', condition === 'rewind'); }
+        else { setTimeout(() => { if (gamePhase !== 'ended') { setGamePhase('rewind_watch'); setTimeout(() => { setGamePhase('rewind_back'); soundManager.playRewind(); }, 1000); } }, 800); }
       });
-      if (state.time > 450 && gamePhase === 'tutorial_play') endSession('success', 100, true, false);
-      if (state.time > 950 && gamePhase === 'rewind_rescue') endSession('success', 500, true, true);
+      if (state.time > 450 && stage === STAGES.TUTORIAL_PLAY) endSession('success', 100, true, false);
+      if (state.time > 1250 && gamePhase === 'rewind_rescue') endSession('success', 500, true, true);
     } else if (gamePhase === 'rewind_back') {
-      if (state.history.length > 0) { for(let i=0; i<15; i++) { if (state.history.length > 0) { const p = state.history.pop(); Object.assign(state, p); } } }
-      else { setGamePhase('rewind_rescue'); }
+      if (state.history.length > 0 && state.time > 480) {
+        for(let i=0; i<15; i++) { if (state.history.length > 0) { const p = state.history.pop(); Object.assign(state, p); } }
+      } else { 
+        setGamePhase('rewind_rescue'); 
+        soundManager.playIntervention();
+      }
     }
 
     // --- Rendering ---
     ctx.save();
     if (state.shake > 0) { ctx.translate((Math.random()-0.5)*state.shake, (Math.random()-0.5)*state.shake); state.shake *= 0.85; }
     ctx.fillStyle = '#050a10'; ctx.fillRect(0, 0, width, height);
-
     let gridAlpha = state.shake > 10 ? 0.35 : 0.05;
     if (gameResult === 'success' && gamePhase === 'ended') gridAlpha = 0.25;
     ctx.strokeStyle = gameResult === 'success' && gamePhase === 'ended' ? `rgba(0, 255, 255, ${gridAlpha})` : `rgba(0, 255, 204, ${gridAlpha})`;
@@ -238,36 +320,24 @@ const MicrogateExperiment = () => {
     const gridY = ((state.time * (state.ship.isDead ? 0.5 : 2.8)) % 40);
     for (let i = gridY; i < height; i += 40) { ctx.moveTo(0, i); ctx.lineTo(width, i); }
     ctx.stroke();
-
     ctx.fillStyle = '#fff'; state.stars.forEach(s => { ctx.globalAlpha = s.s / 4; ctx.fillRect(s.x, s.y, s.s, s.s); });
     ctx.globalAlpha = 1.0;
 
-    // Gate Rendering (Box/Card style)
     state.gates.forEach(g => {
       if (g.passed) return;
       const drawBox = (x, w, power) => {
-        const isPos = power > 0;
-        const color = isPos ? '#00ffcc' : '#ff3366';
-        ctx.fillStyle = isPos ? 'rgba(0, 255, 204, 0.25)' : 'rgba(255, 50, 80, 0.25)';
-        ctx.strokeStyle = color; ctx.lineWidth = 3;
-        // Draw Card Box
-        ctx.beginPath();
-        if (ctx.roundRect) ctx.roundRect(x, g.y, w, 40, 8); else ctx.rect(x, g.y, w, 40);
-        ctx.fill(); ctx.stroke();
-        // Centered Text
-        ctx.fillStyle = '#fff'; ctx.font = 'bold 18px monospace'; ctx.textAlign = 'center';
-        ctx.fillText(isPos ? `+${power}` : power, x + w/2, g.y + 26);
+        const isPos = power > 0; const color = isPos ? '#00ffcc' : '#ff3366';
+        ctx.fillStyle = isPos ? 'rgba(0, 255, 204, 0.25)' : 'rgba(255, 50, 80, 0.25)'; ctx.strokeStyle = color; ctx.lineWidth = 3;
+        ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(x, g.y, w, 40, 8); else ctx.rect(x, g.y, w, 40); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = '#fff'; ctx.font = 'bold 18px monospace'; ctx.textAlign = 'center'; ctx.fillText(isPos ? `+${power}` : power, x + w/2, g.y + 26);
       };
-      drawBox(g.x1, g.w1, g.p1);
-      drawBox(g.x2, g.w2, g.p2);
+      drawBox(g.x1, g.w1, g.p1); drawBox(g.x2, g.w2, g.p2);
     });
 
     state.enemies.forEach(e => {
       if (e.dead) return;
-      ctx.fillStyle = '#ff3366'; ctx.fillRect(e.x, e.y, e.w, e.h);
-      ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.strokeRect(e.x, e.y, e.w, e.h);
-      ctx.fillStyle = '#fff'; ctx.font = 'bold 18px monospace'; ctx.textAlign = 'center';
-      ctx.fillText(`HP ${e.hp}`, e.x + e.w/2, e.y + e.h/2 + 8);
+      ctx.fillStyle = '#ff3366'; ctx.fillRect(e.x, e.y, e.w, e.h); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.strokeRect(e.x, e.y, e.w, e.h);
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 18px monospace'; ctx.textAlign = 'center'; ctx.fillText(`HP ${e.hp}`, e.x + e.w/2, e.y + e.h/2 + 8);
     });
 
     state.particles.forEach(p => { ctx.globalAlpha = p.life; ctx.fillStyle = p.color; ctx.fillRect(p.x, p.y, p.size, p.size); });
@@ -294,11 +364,9 @@ const MicrogateExperiment = () => {
     }
 
     state.rings.forEach(r => { ctx.globalAlpha = r.life; ctx.strokeStyle = r.color || '#ffffff'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(r.x, r.y, r.r, 0, Math.PI*2); ctx.stroke(); });
-    ctx.globalAlpha = 1.0;
-    ctx.restore();
+    ctx.globalAlpha = 1.0; ctx.restore();
 
     if (state.flash > 0) { const flashColor = gameResult === 'success' ? '200, 255, 255' : '255, 255, 255'; ctx.fillStyle = `rgba(${flashColor}, ${state.flash})`; ctx.fillRect(0, 0, width, height); state.flash -= 0.04; }
-
     if (state.vignette !== 0) {
       const grad = ctx.createRadialGradient(width/2, height/2, width*0.05, width/2, height/2, width*0.95);
       if (state.vignette > 0) { grad.addColorStop(0, 'rgba(0, 0, 0, 0)'); grad.addColorStop(1, `rgba(100, 0, 10, ${state.vignette * 0.85})`); }
@@ -312,12 +380,11 @@ const MicrogateExperiment = () => {
       const bounce = isSuccess ? Math.sin(progress * Math.PI) * 0.2 : 0; const scale = (0.4 + progress * 0.6) + bounce;
       const alpha = Math.min(1, progress * 3);
       ctx.save(); ctx.translate(width/2, height/2 - 80); ctx.scale(scale, scale); ctx.globalAlpha = alpha;
-      ctx.fillStyle = isSuccess ? '#00ffff' : '#ff3366'; ctx.shadowColor = isSuccess ? 'rgba(0, 255, 255, 1.0)' : 'rgba(255, 0, 50, 0.8)';
-      ctx.shadowBlur = isSuccess ? 70 : 35; ctx.font = 'bold 98px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(s.type, 0, 0);
+      ctx.fillStyle = isSuccess ? '#00ffff' : '#ff3366'; ctx.shadowColor = isSuccess ? 'rgba(0, 255, 255, 1.0)' : 'rgba(255, 0, 50, 0.8)'; ctx.shadowBlur = isSuccess ? 70 : 35; ctx.font = 'bold 98px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(s.type, 0, 0);
       if (state.failReason) {
         ctx.fillStyle = '#fff'; ctx.font = 'bold 32px monospace'; ctx.shadowBlur = 0; ctx.fillText(state.failReason, 0, 100);
         if (isSuccess) { ctx.font = 'bold 22px monospace'; ctx.fillStyle = '#00ffff'; ctx.fillText("▶ 결과를 성공적으로 바꿨습니다", 0, 145); }
-        else { ctx.font = '18px monospace'; ctx.fillStyle = '#94a3b8'; ctx.fillText("전투에 필요한 파워가 모자랐습니다", 0, 145); }
+        else { ctx.font = '18px monospace'; ctx.fillStyle = '#94a3b8'; ctx.fillText("더 나은 선택이 가능했습니다", 0, 145); }
       }
       ctx.restore(); if (s.t > 0) s.t -= isSuccess ? 0.004 : 0.01; 
     }
@@ -327,22 +394,33 @@ const MicrogateExperiment = () => {
       ctx.fillText(gamePhase === 'rewind_watch' ? 'COLLISION!' : '◀◀ REWIND', width/2, height/2 + 80);
       ctx.shadowBlur = 0;
     } 
-    
     if (gamePhase === 'ended') { ctx.fillStyle = gameResult === 'success' ? 'rgba(0, 40, 30, 0.15)' : 'rgba(0, 0, 0, 0.45)'; ctx.fillRect(0, 0, width, height); }
-  }, [gamePhase, condition, endSession, gameResult, isSlowMo, stage]);
+  }, [gamePhase, condition, gameResult, stage]); // endSession is now managed without being a dependency
 
   const checkCollisions = (state, onFail) => {
     const s = state.ship;
     state.gates.forEach(g => {
       if (!g.passed && g.y + 40 > s.y && g.y < s.y + s.h) {
-        if (s.x + s.w/2 > g.x1 && s.x + s.w/2 < g.x1 + g.w1) { state.ship.power += g.p1; g.passed = true; spawnParticles(s.x + s.w/2, g.y + 20, 15, g.p1 > 0 ? '#00ffcc' : '#ff3366', 4); }
-        else if (s.x + s.w/2 > g.x2 && s.x + s.w/2 < g.x2 + g.w2) { state.ship.power += g.p2; g.passed = true; spawnParticles(s.x + s.w/2, g.y + 20, 15, g.p2 > 0 ? '#00ffcc' : '#ff3366', 4); }
+        if (s.x + s.w/2 > g.x1 && s.x + s.w/2 < g.x1 + g.w1) { 
+          state.ship.power += g.p1; g.passed = true; 
+          spawnParticles(s.x + s.w/2, g.y + 20, 15, g.p1 > 0 ? '#00ffcc' : '#ff3366', 4);
+          soundManager.playGate(g.p1 > 0);
+        }
+        else if (s.x + s.w/2 > g.x2 && s.x + s.w/2 < g.x2 + g.w2) { 
+          state.ship.power += g.p2; g.passed = true; 
+          spawnParticles(s.x + s.w/2, g.y + 20, 15, g.p2 > 0 ? '#00ffcc' : '#ff3366', 4);
+          soundManager.playGate(g.p2 > 0);
+        }
         if (state.ship.power <= 0) onFail("POWER DEPLETED");
       }
     });
     state.enemies.forEach(e => {
       if (!e.dead && s.x < e.x + e.w && s.x + s.w > e.x && s.y < e.y + e.h && s.y + s.h > e.y) {
-        if (state.ship.power >= e.hp) { state.ship.power -= e.hp; e.dead = true; state.shake = 12; state.flash = 0.35; spawnParticles(e.x + e.w/2, e.y + e.h/2, 20, '#ff3366', 7); }
+        if (state.ship.power >= e.hp) { 
+          state.ship.power -= e.hp; e.dead = true; state.shake = 12; state.flash = 0.35; 
+          spawnParticles(e.x + e.w/2, e.y + e.h/2, 20, '#ff3366', 7);
+          soundManager.playGate(false); // Thud sound
+        }
         else onFail(`HP ${e.hp} > POWER ${state.ship.power}`);
       }
     });
@@ -362,7 +440,7 @@ const MicrogateExperiment = () => {
       if (!canvasRef.current) return;
       const rect = canvasRef.current.getBoundingClientRect();
       const x = e.touches ? e.touches[0].clientX : e.clientX;
-      input.current.mouseX = x - rect.left;
+      input.current.mouseX = (x - rect.left) * (canvasRef.current.width / rect.width);
     };
     window.addEventListener('mousemove', move); window.addEventListener('touchmove', move);
     return () => { window.removeEventListener('mousemove', move); window.removeEventListener('touchmove', move); };
@@ -423,7 +501,7 @@ const MicrogateExperiment = () => {
             <div className="guide-item"><strong>형식 2: 개입형 실패 광고</strong><p>실패 장면을 본 뒤, 되감기 후 직접 개입하는 형식입니다.</p></div>
             <p>본 실험에 앞서 조작법을 익히기 위한 튜토리얼을 진행합니다.</p>
           </div>
-          <button className="btn primary" onClick={() => { initGame(true); setStage(STAGES.TUTORIAL_PLAY); }}>튜토리얼 시작</button>
+          <button className="btn primary" onClick={() => { soundManager.playClick(); initGame(true); setStage(STAGES.TUTORIAL_PLAY); }}>튜토리얼 시작</button>
         </div>
       )}
 
@@ -444,7 +522,7 @@ const MicrogateExperiment = () => {
               <><h3>[ 형식 2: 개입형 실패 광고 ]</h3><p>실패 장면 후 되감기 시점부터 <strong>직접 개입해 결과를 바꾸십시오.</strong></p></>
             )}
           </div>
-          <button className="btn primary" onClick={() => { initGame(false); setSessionStartTime(Date.now()); setSessionSurvey(EMPTY_SURVEY); setStage(STAGES.SESSION_PLAY); }}>시작</button>
+          <button className="btn primary" onClick={() => { soundManager.playClick(); initGame(false); setSessionStartTime(Date.now()); setSessionSurvey(EMPTY_SURVEY); setStage(STAGES.SESSION_PLAY); }}>시작</button>
         </div>
       )}
 
@@ -463,6 +541,7 @@ const MicrogateExperiment = () => {
             {renderLikert('schadenfreude', '5. 실패 장면을 보는 것이 재미있거나 통쾌했다.')}
           </div>
           <button className="btn primary" onClick={() => {
+            soundManager.playClick();
             if (Object.values(sessionSurvey).some(v => v === 0)) return alert("모든 문항에 응답해 주세요.");
             setLog(prev => { const ns = [...prev.sessions]; ns[currentSessionIndex].survey = { ...sessionSurvey }; return { ...prev, sessions: ns }; });
             if (currentSessionIndex + 1 < CONDITION_ORDER.length) { setCurrentSessionIndex(prev => prev + 1); setSessionSurvey(EMPTY_SURVEY); setStage(STAGES.SESSION_INTRO); }
@@ -480,6 +559,7 @@ const MicrogateExperiment = () => {
             <div className="survey-q"><p>3. 이유가 있다면? (선택사항)</p><textarea placeholder="자유롭게 입력해 주세요." value={finalSurvey.reason} onChange={e => setFinalSurvey(p => ({ ...p, reason: e.target.value }))} style={{height:'100px'}}></textarea></div>
           </div>
           <button className="btn primary" onClick={() => {
+            soundManager.playClick();
             if (!finalSurvey.mostAttractive || !finalSurvey.mostWantToInstall) return alert("필수 항목을 선택해 주세요.");
             setLog(prev => ({ ...prev, finalSurvey, completed: true })); setStage(STAGES.COMPLETION);
           }}>완료</button>
@@ -491,8 +571,8 @@ const MicrogateExperiment = () => {
           <h2>실험 완료</h2>
           <p style={{textAlign:'center', marginBottom:'20px'}}>참여해주셔서 감사합니다.</p>
           <div className="btn-group">
-            <button className="btn outline" onClick={() => { const blob = new Blob([JSON.stringify(log, null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `${log.participantId}_data.json`; a.click(); }}>JSON 저장</button>
-            <button className="btn primary" onClick={exportCSV}>CSV 저장</button>
+            <button className="btn outline" onClick={() => { soundManager.playClick(); const blob = new Blob([JSON.stringify(log, null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `${log.participantId}_data.json`; a.click(); }}>JSON 저장</button>
+            <button className="btn primary" onClick={() => { soundManager.playClick(); exportCSV(); }}>CSV 저장</button>
           </div>
         </div>
       )}
