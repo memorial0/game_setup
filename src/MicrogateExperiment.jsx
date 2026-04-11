@@ -52,9 +52,10 @@ const MicrogateExperiment = () => {
   const canvasRef = useRef(null);
   const reqRef = useRef(null);
   const gameState = useRef({
-    ship: { x: 220, y: 550, w: 40, h: 40, power: 10 },
-    gates: [], enemies: [], stars: [], particles: [], speed: 5, time: 0, eventIdx: 0, history: [],
-    flash: 0, slowFactor: 1, timeline: MAIN_TIMELINE
+    ship: { x: 220, y: 550, w: 40, h: 40, power: 10, isDead: false, vx: 0, vy: 0, ang: 0, av: 0 },
+    gates: [], enemies: [], stars: [], particles: [], rings: [], speed: 5, time: 0, eventIdx: 0, history: [],
+    flash: 0, slowFactor: 1, timeline: MAIN_TIMELINE,
+    shake: 0, resultAnim: { type: '', t: 0 }, vignette: 0, failReason: ''
   });
   const input = useRef({ left: false, right: false, mouseX: null });
   const condition = CONDITION_ORDER[currentSessionIndex];
@@ -67,21 +68,75 @@ const MicrogateExperiment = () => {
 
   const initGame = (isTutorial = false) => {
     gameState.current = {
-      ship: { x: 220, y: 550, w: 40, h: 40, power: 10 },
+      ship: { x: 220, y: 550, w: 40, h: 40, power: 10, isDead: false, vx: 0, vy: 0, ang: 0, av: 0 },
       gates: [], enemies: [], stars: Array.from({length: 30}, () => ({x: Math.random()*480, y: Math.random()*720, s: 1+Math.random()*3})),
-      particles: [], speed: 5, time: 0, eventIdx: 0, history: [],
+      particles: [], rings: [], speed: 5, time: 0, eventIdx: 0, history: [],
       flash: 0, slowFactor: 1,
-      timeline: isTutorial ? TUTORIAL_TIMELINE : MAIN_TIMELINE
+      timeline: isTutorial ? TUTORIAL_TIMELINE : MAIN_TIMELINE,
+      shake: 0, resultAnim: { type: '', t: 0 }, vignette: 0, failReason: ''
     };
     setIsSlowMo(false);
     setGamePhase(isTutorial ? 'tutorial_play' : 'autoplay_fail_watch');
     input.current = { left: false, right: false, mouseX: null };
   };
 
+  const spawnParticles = (x, y, count, color, speed = 5, size = 3) => {
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const s = Math.random() * speed + 1;
+      gameState.current.particles.push({
+        x, y, vx: Math.cos(angle) * s, vy: Math.sin(angle) * s,
+        life: 1.0, decay: 0.02 + Math.random() * 0.03, color, size: (2 + Math.random() * size)
+      });
+    }
+  };
+
   const endSession = useCallback((result, score, rescue, rewind) => {
-    if (gamePhase === 'ended') return;
-    setGameResult(result);
-    setGamePhase('ended');
+    if (gamePhase === 'ended' && !gameState.current.ship.isDead) return;
+    
+    const state = gameState.current;
+    if (result === 'success') {
+      state.resultAnim = { type: rescue && rewind ? 'RESCUED' : 'SUCCESS', t: 1.0 };
+      state.vignette = -1.5; // Stronger brightening glow
+      state.flash = 0.8;
+      state.shake = 5;
+      
+      // Ship breakthrough physics
+      state.ship.vy = -12;
+      state.ship.vx = 0;
+      
+      const particleColor = '#00ffff';
+      spawnParticles(state.ship.x + state.ship.w/2, state.ship.y + state.ship.h/2, 60, particleColor, 12, 5);
+      
+      // Multiple expanding rings
+      for(let i=0; i<3; i++) {
+        setTimeout(() => {
+          state.rings.push({ x: state.ship.x + state.ship.w/2, y: state.ship.y + state.ship.h/2, r: 10, life: 1.0, speed: 8 + i*2 });
+        }, i * 150);
+      }
+
+      if (rescue && rewind) {
+        state.failReason = "직접 조작으로 결과를 바꿨습니다!";
+        setTimeout(() => {
+          spawnParticles(state.ship.x + state.ship.w/2, state.ship.y + state.ship.h/2, 100, '#ffffff', 18, 3);
+          state.flash = 1.0;
+          state.shake = 15;
+          state.vignette = -2.0;
+        }, 400);
+      } else {
+        state.failReason = "위험 구간 돌파 성공!";
+      }
+
+      setGameResult(result);
+      setGamePhase('ended');
+    } else {
+      state.resultAnim = { type: 'FAILURE', t: 1.0 };
+      state.vignette = 1.0;
+      setGameResult(result);
+      setTimeout(() => {
+        setGamePhase('ended');
+      }, 800);
+    }
 
     if (stage === STAGES.TUTORIAL_PLAY) {
       setTimeout(() => setStage(STAGES.SESSION_INTRO), 2000);
@@ -94,7 +149,9 @@ const MicrogateExperiment = () => {
       newSessions[currentSessionIndex] = { sessionIndex: currentSessionIndex+1, condition, result, score, durationMs: duration, rescueSuccess: rescue, rewindOccurred: rewind, survey: {} };
       return { ...prev, sessions: newSessions };
     });
-    setTimeout(() => setStage(STAGES.SESSION_SURVEY), 2500);
+    
+    const delay = result === 'success' ? 2800 : 2500;
+    setTimeout(() => setStage(STAGES.SESSION_SURVEY), delay);
   }, [sessionStartTime, currentSessionIndex, condition, gamePhase, stage]);
 
   const updateGame = useCallback(() => {
@@ -107,75 +164,112 @@ const MicrogateExperiment = () => {
     // --- Timeline Spawner ---
     if (state.eventIdx < state.timeline.length && state.time >= state.timeline[state.eventIdx].t) {
       const ev = state.timeline[state.eventIdx];
-      if (ev.type === 'gate') state.gates.push({ ...ev, y: -120, passed: false }); // 스폰 위치 약간 위로
+      if (ev.type === 'gate') state.gates.push({ ...ev, y: -120, passed: false });
       else if (ev.type === 'enemy') state.enemies.push({ ...ev, y: -120, dead: false });
       state.eventIdx++;
     }
 
     const currentSpeed = state.speed * state.slowFactor;
 
+    // Update Particles
+    state.particles = state.particles.filter(p => p.life > 0);
+    state.particles.forEach(p => {
+      p.x += p.vx; p.y += p.vy; p.life -= p.decay;
+    });
+
+    // Update Rings
+    state.rings = state.rings.filter(r => r.life > 0);
+    state.rings.forEach(r => {
+      r.r += r.speed || 5; r.life -= 0.025;
+    });
+
     // Move Background Stars
     state.stars.forEach(s => {
-      s.y += currentSpeed * s.s * 0.5;
+      const starSpeed = gameResult === 'success' && gamePhase === 'ended' ? currentSpeed * 5 : currentSpeed;
+      s.y += starSpeed * s.s * 0.5;
       if (s.y > height) { s.y = -10; s.x = Math.random() * width; }
     });
 
-    if (gamePhase === 'autoplay_fail_watch') {
-      state.time += state.slowFactor;
-      const currentGate = state.gates.find(g => !g.passed && g.y < state.ship.y);
-      if (currentGate && currentGate.autoTarget) {
-        state.ship.x += (currentGate.autoTarget - (state.ship.x + state.ship.w/2)) * 0.04;
-        state.ship.x += Math.sin(state.time * 0.1) * 0.5;
-      }
+    if (state.ship.isDead) {
+      state.ship.x += state.ship.vx;
+      state.ship.y += state.ship.vy;
+      state.ship.ang += state.ship.av;
+      state.ship.vx *= 0.95; state.ship.vy *= 0.95; state.ship.av *= 0.95;
+      state.slowFactor = Math.max(0.05, state.slowFactor * 0.9);
+    } else if (gameResult === 'success' && gamePhase === 'ended') {
+      state.ship.y += state.ship.vy;
+      state.ship.vy *= 0.98;
+      state.time += 2; // Accelerate grid for speed feel
+    }
 
-      if (condition === 'rewind') {
-        state.history.push({ 
-          ship: { ...state.ship }, gates: state.gates.map(g => ({ ...g })), 
-          enemies: state.enemies.map(e => ({ ...e })), time: state.time, eventIdx: state.eventIdx
-        });
-        if (state.history.length > 500) state.history.shift();
+    if ((gamePhase === 'autoplay_fail_watch' || gamePhase === 'rewind_rescue' || gamePhase === 'tutorial_play') && !state.ship.isDead) {
+      if (gamePhase === 'autoplay_fail_watch') {
+        state.time += state.slowFactor;
+        const currentGate = state.gates.find(g => !g.passed && g.y < state.ship.y);
+        if (currentGate && currentGate.autoTarget) {
+          state.ship.x += (currentGate.autoTarget - (state.ship.x + state.ship.w/2)) * 0.04;
+          state.ship.x += Math.sin(state.time * 0.1) * 0.5;
+        }
+
+        if (condition === 'rewind') {
+          state.history.push({ 
+            ship: { ...state.ship }, gates: state.gates.map(g => ({ ...g })), 
+            enemies: state.enemies.map(e => ({ ...e })), time: state.time, eventIdx: state.eventIdx
+          });
+          if (state.history.length > 500) state.history.shift();
+        }
+
+        const imminentEnemy = state.enemies.find(e => !e.dead && e.y + e.h > state.ship.y - 80 && e.y < state.ship.y + state.ship.h);
+        if (imminentEnemy && state.ship.power < imminentEnemy.hp) {
+          state.slowFactor = Math.max(0.1, state.slowFactor - 0.04);
+          setIsSlowMo(true);
+        } else {
+          state.slowFactor = Math.min(1.0, state.slowFactor + 0.1);
+          setIsSlowMo(false);
+        }
+      } else {
+        state.time++;
+        state.slowFactor = 1.0;
+        if (input.current.mouseX !== null) {
+          state.ship.x += (input.current.mouseX - state.ship.w/2 - state.ship.x) * 0.2;
+          if (state.ship.x < 0) state.ship.x = 0;
+          if (state.ship.x > width - state.ship.w) state.ship.x = width - state.ship.w;
+        }
       }
 
       state.gates.forEach(g => g.y += currentSpeed);
       state.enemies.forEach(e => e.y += currentSpeed);
 
-      const imminentEnemy = state.enemies.find(e => !e.dead && e.y + e.h > state.ship.y - 80 && e.y < state.ship.y + state.ship.h);
-      if (imminentEnemy && state.ship.power < imminentEnemy.hp) {
-        state.slowFactor = Math.max(0.2, state.slowFactor - 0.05);
-        setIsSlowMo(true);
-      } else {
-        state.slowFactor = Math.min(1.0, state.slowFactor + 0.1);
-        setIsSlowMo(false);
-      }
-
-      checkCollisions(state, () => {
-        state.flash = 1.0;
-        if (condition === 'fail') endSession('fail', 0, null, false);
-        else { setGamePhase('rewind_watch'); setTimeout(() => setGamePhase('rewind_back'), 1000); }
+      checkCollisions(state, (reason) => {
+        state.ship.isDead = true;
+        state.ship.vx = (Math.random() - 0.5) * 15;
+        state.ship.vy = (Math.random() * 5 + 5);
+        state.ship.av = (Math.random() - 0.5) * 0.4;
+        state.flash = 0.8;
+        state.shake = 30;
+        state.vignette = 1.0;
+        state.failReason = reason;
+        spawnParticles(state.ship.x + state.ship.w/2, state.ship.y + state.ship.h/2, 30, '#ffcc33', 10, 4); // Sparks
+        spawnParticles(state.ship.x + state.ship.w/2, state.ship.y + state.ship.h/2, 20, '#ff3366', 6, 6);  // Debris
+        
+        if (condition === 'fail' || gamePhase === 'rewind_rescue' || gamePhase === 'tutorial_play') {
+          endSession('fail', 0, gamePhase === 'rewind_rescue', condition === 'rewind');
+        } else {
+          setTimeout(() => {
+            if (gamePhase !== 'ended') {
+              setGamePhase('rewind_watch');
+              setTimeout(() => setGamePhase('rewind_back'), 1000);
+            }
+          }, 800);
+        }
       });
 
-    } else if (gamePhase === 'rewind_rescue' || gamePhase === 'tutorial_play') {
-      state.time++;
-      state.slowFactor = 1.0;
-      if (input.current.mouseX !== null) {
-        state.ship.x += (input.current.mouseX - state.ship.w/2 - state.ship.x) * 0.2;
-        if (state.ship.x < 0) state.ship.x = 0;
-        if (state.ship.x > width - state.ship.w) state.ship.x = width - state.ship.w;
-      }
-      state.gates.forEach(g => g.y += state.speed);
-      state.enemies.forEach(e => e.y += state.speed);
-      
-      checkCollisions(state, () => {
-        state.flash = 1.0;
-        if (gamePhase === 'tutorial_play') { state.ship.power = 10; return; } // No death in tutorial
-        endSession('fail', 0, false, true);
-      });
       if (state.time > 450 && gamePhase === 'tutorial_play') endSession('success', 100, true, false);
       if (state.time > 950 && gamePhase === 'rewind_rescue') endSession('success', 500, true, true);
 
     } else if (gamePhase === 'rewind_back') {
       if (state.history.length > 0) {
-        for(let i=0; i<10; i++) {
+        for(let i=0; i<15; i++) {
           if (state.history.length > 0) {
             const p = state.history.pop();
             Object.assign(state, p);
@@ -185,21 +279,31 @@ const MicrogateExperiment = () => {
     }
 
     // --- Rendering ---
-    ctx.fillStyle = '#071018'; ctx.fillRect(0, 0, width, height);
+    ctx.save();
+    if (state.shake > 0) {
+      ctx.translate((Math.random()-0.5)*state.shake, (Math.random()-0.5)*state.shake);
+      state.shake *= 0.85;
+    }
 
-    // Draw Stars
+    ctx.fillStyle = '#050a10'; ctx.fillRect(0, 0, width, height);
+
+    // Draw Grid (Reacts to impact/victory)
+    let gridAlpha = state.shake > 10 ? 0.25 : 0.05;
+    if (gameResult === 'success' && gamePhase === 'ended') gridAlpha = 0.15;
+    ctx.strokeStyle = gameResult === 'success' && gamePhase === 'ended' ? `rgba(0, 255, 255, ${gridAlpha})` : `rgba(0, 255, 204, ${gridAlpha})`;
+    ctx.lineWidth = 1; ctx.beginPath();
+    for (let i = 0; i < width; i += 40) { ctx.moveTo(i, 0); ctx.lineTo(i, height); }
+    const gridY = ((state.time * (state.ship.isDead ? 0.5 : 2)) % 40);
+    for (let i = gridY; i < height; i += 40) { ctx.moveTo(0, i); ctx.lineTo(width, i); }
+    ctx.stroke();
+
+    // Stars
     ctx.fillStyle = '#fff';
     state.stars.forEach(s => {
       ctx.globalAlpha = s.s / 4;
       ctx.fillRect(s.x, s.y, s.s, s.s);
     });
     ctx.globalAlpha = 1.0;
-    
-    // Draw Grid
-    ctx.strokeStyle = 'rgba(0, 255, 204, 0.05)'; ctx.lineWidth = 1; ctx.beginPath();
-    for (let i = 0; i < width; i += 40) { ctx.moveTo(i, 0); ctx.lineTo(i, height); }
-    for (let i = (state.time * 2) % 40; i < height; i += 40) { ctx.moveTo(0, i); ctx.lineTo(width, i); }
-    ctx.stroke();
 
     state.gates.forEach(g => {
       if (g.passed) return;
@@ -210,9 +314,6 @@ const MicrogateExperiment = () => {
       ctx.fillStyle = '#fff'; ctx.font = 'bold 16px monospace'; ctx.textAlign = 'center';
       ctx.fillText(g.p1 > 0 ? `+${g.p1}` : g.p1, g.x1 + g.w1/2, g.y + 25);
       ctx.fillText(g.p2 > 0 ? `+${g.p2}` : g.p2, g.x2 + g.w2/2, g.y + 25);
-      ctx.strokeStyle = '#fff'; ctx.lineWidth = (g.w1 < 120 || g.w2 < 120) ? 2 : 0;
-      if (g.w1 < 120) ctx.strokeRect(g.x1, g.y, g.w1, 40);
-      if (g.w2 < 120) ctx.strokeRect(g.x2, g.y, g.w2, 40);
     });
 
     state.enemies.forEach(e => {
@@ -223,53 +324,132 @@ const MicrogateExperiment = () => {
       ctx.fillText(`HP ${e.hp}`, e.x + e.w/2, e.y + e.h/2 + 8);
     });
 
-    // Ship with small vibration if slow-mo
-    const vib = isSlowMo ? Math.random() * 4 - 2 : 0;
-    ctx.fillStyle = '#00ffcc';
-    ctx.beginPath(); ctx.moveTo(state.ship.x + state.ship.w/2 + vib, state.ship.y);
-    ctx.lineTo(state.ship.x + state.ship.w + vib, state.ship.y + state.ship.h);
-    ctx.lineTo(state.ship.x + vib, state.ship.y + state.ship.h); ctx.fill();
-    ctx.fillStyle = '#fff'; ctx.font = 'bold 20px monospace';
-    ctx.fillText(state.ship.power, state.ship.x + state.ship.w/2, state.ship.y + state.ship.h + 25);
+    // Particles
+    state.particles.forEach(p => {
+      ctx.globalAlpha = p.life;
+      ctx.fillStyle = p.color;
+      ctx.fillRect(p.x, p.y, p.size, p.size);
+    });
+    ctx.globalAlpha = 1.0;
 
-    // --- Failure/Overlay Effects ---
+    // Ship
+    ctx.save();
+    ctx.translate(state.ship.x + state.ship.w/2, state.ship.y + state.ship.h/2);
+    ctx.rotate(state.ship.ang);
     
-    // 1. Initial Collision Flash (Burgundy instead of Bright Red)
-    if (state.flash > 0) {
-      ctx.fillStyle = `rgba(120, 0, 30, ${state.flash * 0.7})`;
-      ctx.fillRect(0, 0, width, height);
-      state.flash -= 0.04;
+    if (!state.ship.isDead) {
+      // Thruster - intensified on success
+      const isVictory = gameResult === 'success' && gamePhase === 'ended';
+      ctx.fillStyle = isVictory ? '#ffffff' : '#00ffff'; 
+      ctx.globalAlpha = isVictory ? 0.8 : (0.5 + Math.random()*0.5);
+      const tLen = isVictory ? 60 : 35;
+      ctx.beginPath(); ctx.moveTo(-12, 20); ctx.lineTo(12, 20); ctx.lineTo(0, tLen); ctx.fill();
+      ctx.globalAlpha = 1.0;
+      ctx.fillStyle = isVictory ? '#99ffff' : '#00ffcc';
+      if (isVictory) {
+        ctx.shadowColor = '#00ffff'; ctx.shadowBlur = 20;
+      }
+    } else {
+      ctx.fillStyle = '#445566'; // Dead color
+    }
+    
+    ctx.beginPath(); ctx.moveTo(0, -20); ctx.lineTo(20, 20); ctx.lineTo(-20, 20); ctx.closePath(); ctx.fill();
+    if (!state.ship.isDead) {
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+    }
+    ctx.shadowBlur = 0;
+    ctx.restore();
+
+    // Power text
+    if (!state.ship.isDead) {
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 20px monospace'; ctx.textAlign = 'center';
+      ctx.fillText(state.ship.power, state.ship.x + state.ship.w/2, state.ship.y + state.ship.h + 25);
     }
 
-    // 2. Rewind/Failure Vignette Overlay
-    if (gamePhase === 'rewind_watch' || gamePhase === 'rewind_back') {
-      const grad = ctx.createRadialGradient(width/2, height/2, 100, width/2, height/2, width);
-      grad.addColorStop(0, 'rgba(10, 15, 25, 0.4)'); // Center: Dark & Clear
-      grad.addColorStop(1, 'rgba(80, 0, 20, 0.6)');  // Edge: Deep Wine
+    // Rings
+    state.rings.forEach(r => {
+      ctx.globalAlpha = r.life;
+      ctx.strokeStyle = isVictory ? '#ffffff' : '#00ffff'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(r.x, r.y, r.r, 0, Math.PI*2); ctx.stroke();
+    });
+    ctx.globalAlpha = 1.0;
+
+    ctx.restore();
+
+    // --- Overlay Effects ---
+    
+    if (state.flash > 0) {
+      const flashColor = gameResult === 'success' ? '200, 255, 240' : '255, 255, 255';
+      ctx.fillStyle = `rgba(${flashColor}, ${state.flash})`;
+      ctx.fillRect(0, 0, width, height);
+      state.flash -= 0.05;
+    }
+
+    if (state.vignette !== 0) {
+      const grad = ctx.createRadialGradient(width/2, height/2, width/4, width/2, height/2, width*0.9);
+      if (state.vignette > 0) { // Dark Vignette (Failure)
+        grad.addColorStop(0, 'rgba(0, 0, 0, 0)');
+        grad.addColorStop(1, `rgba(100, 0, 10, ${state.vignette * 0.8})`);
+      } else { // Light Glow (Success)
+        grad.addColorStop(0, `rgba(0, 255, 255, ${Math.abs(state.vignette) * 0.2})`);
+        grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      }
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, width, height);
+      if (gamePhase !== 'ended' || gameResult === 'success') {
+        state.vignette *= 0.98;
+        if (Math.abs(state.vignette) < 0.01) state.vignette = 0;
+      }
+    }
 
-      ctx.fillStyle = '#ffeef0'; // Soft pinkish white
-      ctx.font = 'bold 40px monospace'; ctx.textAlign = 'center';
-      ctx.shadowColor = 'rgba(255, 50, 80, 0.5)'; ctx.shadowBlur = 15;
-      ctx.fillText(gamePhase === 'rewind_watch' ? 'COLLISION!' : '◀◀ REWIND', width/2, height/2);
+    if (state.resultAnim.type) {
+      const s = state.resultAnim;
+      const progress = Math.min(1, (1 - s.t) * 5);
+      const isSuccess = s.type === 'SUCCESS' || s.type === 'RESCUED';
+      
+      // Pop-up bounce effect for success
+      const bounce = isSuccess ? Math.sin(progress * Math.PI) * 0.1 : 0;
+      const scale = (0.4 + progress * 0.6) + bounce;
+      const alpha = Math.min(1, progress * 3);
+      
+      ctx.save();
+      ctx.translate(width/2, height/2 - 60);
+      ctx.scale(scale, scale);
+      ctx.globalAlpha = alpha;
+      
+      ctx.fillStyle = isSuccess ? '#00ffff' : '#ff3366';
+      ctx.shadowColor = isSuccess ? 'rgba(0, 255, 255, 1.0)' : 'rgba(255, 0, 50, 0.8)';
+      ctx.shadowBlur = isSuccess ? 50 : 30;
+      ctx.font = 'bold 94px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(s.type, 0, 0);
+      
+      if (state.failReason) {
+        ctx.fillStyle = '#fff'; ctx.font = 'bold 28px monospace'; ctx.shadowBlur = 0;
+        ctx.fillText(state.failReason, 0, 80);
+        
+        if (isSuccess) {
+          ctx.font = 'bold 18px monospace'; ctx.fillStyle = '#00ffff';
+          ctx.fillText(s.type === 'RESCUED' ? "▶ USER INTERVENTION SUCCESS" : "▶ MISSION COMPLETE", 0, 120);
+        } else {
+          ctx.font = '18px monospace'; ctx.fillStyle = '#94a3b8';
+          ctx.fillText("전투에 필요한 파워가 모자랐습니다", 0, 110);
+        }
+      }
+      
+      ctx.restore();
+      if (s.t > 0) s.t -= isSuccess ? 0.006 : 0.01; 
+    }
+
+    if (gamePhase === 'rewind_watch' || gamePhase === 'rewind_back') {
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 40px monospace'; ctx.textAlign = 'center';
+      ctx.shadowColor = 'rgba(255, 50, 80, 0.8)'; ctx.shadowBlur = 20;
+      ctx.fillText(gamePhase === 'rewind_watch' ? 'COLLISION!' : '◀◀ REWIND', width/2, height/2 + 80);
       ctx.shadowBlur = 0;
     } 
-    // 3. Final Result Screen
-    else if (gamePhase === 'ended') {
-      ctx.fillStyle = 'rgba(5, 10, 20, 0.85)';
+    
+    if (gamePhase === 'ended') {
+      ctx.fillStyle = gameResult === 'success' ? 'rgba(0, 40, 30, 0.2)' : 'rgba(0, 0, 0, 0.4)';
       ctx.fillRect(0, 0, width, height);
-      
-      const isSuccess = gameResult === 'success';
-      ctx.fillStyle = isSuccess ? '#00ffcc' : '#ff5577';
-      ctx.shadowColor = isSuccess ? 'rgba(0, 255, 204, 0.5)' : 'rgba(255, 80, 110, 0.5)';
-      ctx.shadowBlur = 20;
-      ctx.font = 'bold 44px sans-serif'; ctx.textAlign = 'center';
-      ctx.fillText(stage === STAGES.TUTORIAL_PLAY ? 'TUTORIAL END' : (isSuccess ? 'MISSION COMPLETE' : 'MISSION FAILED'), width/2, height/2);
-      ctx.shadowBlur = 0;
-      
-      ctx.font = '20px monospace'; ctx.fillStyle = '#94a3b8';
-      ctx.fillText(isSuccess ? '모든 적을 격파했습니다' : '파워가 부족합니다', width/2, height/2 + 60);
     }
   }, [gamePhase, condition, endSession, gameResult, isSlowMo, stage]);
 
@@ -277,15 +457,26 @@ const MicrogateExperiment = () => {
     const s = state.ship;
     state.gates.forEach(g => {
       if (!g.passed && g.y + 40 > s.y && g.y < s.y + s.h) {
-        if (s.x + s.w/2 > g.x1 && s.x + s.w/2 < g.x1 + g.w1) { state.ship.power += g.p1; g.passed = true; }
-        else if (s.x + s.w/2 > g.x2 && s.x + s.w/2 < g.x2 + g.w2) { state.ship.power += g.p2; g.passed = true; }
-        if (state.ship.power <= 0) onFail();
+        if (s.x + s.w/2 > g.x1 && s.x + s.w/2 < g.x1 + g.w1) { 
+          state.ship.power += g.p1; g.passed = true; 
+          spawnParticles(s.x + s.w/2, g.y + 20, 10, g.p1 > 0 ? '#00ffcc' : '#ff3366', 3);
+        }
+        else if (s.x + s.w/2 > g.x2 && s.x + s.w/2 < g.x2 + g.w2) { 
+          state.ship.power += g.p2; g.passed = true; 
+          spawnParticles(s.x + s.w/2, g.y + 20, 10, g.p2 > 0 ? '#00ffcc' : '#ff3366', 3);
+        }
+        if (state.ship.power <= 0) onFail("POWER DEPLETED");
       }
     });
     state.enemies.forEach(e => {
       if (!e.dead && s.x < e.x + e.w && s.x + s.w > e.x && s.y < e.y + e.h && s.y + s.h > e.y) {
-        if (state.ship.power >= e.hp) { state.ship.power -= e.hp; e.dead = true; }
-        else onFail();
+        if (state.ship.power >= e.hp) { 
+          state.ship.power -= e.hp; e.dead = true; 
+          state.shake = 10;
+          state.flash = 0.3;
+          spawnParticles(e.x + e.w/2, e.y + e.h/2, 15, '#ff3366', 6);
+        }
+        else onFail(`HP ${e.hp} > POWER ${state.ship.power}`);
       }
     });
   };
