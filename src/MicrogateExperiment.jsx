@@ -15,26 +15,26 @@ const CONDITION_ORDER = ['fail', 'rewind'];
 const EMPTY_SURVEY = { interesting: 0, agency: 0, betterThanFail: 0, wantToPlay: 0, schadenfreude: 0 };
 
 // --- 타임라인 데이터 ---
+// 튜토리얼 게이트 간격을 80px로 확대 (중앙 240 기준 좌우 분리)
 const TUTORIAL_TIMELINE = [
-  { type: 'gate', t: 40, x1: 20, w1: 200, p1: 10, x2: 240, w2: 220, p2: 5 },
+  { type: 'gate', t: 40, x1: 20, w1: 180, p1: 10, x2: 280, w2: 180, p2: 5 },
   { type: 'enemy', t: 120, x: 140, w: 200, h: 60, hp: 3 },
-  { type: 'gate', t: 200, x1: 20, w1: 220, p1: 5, x2: 240, w2: 200, p2: 15 },
+  { type: 'gate', t: 200, x1: 20, w1: 180, p1: 5, x2: 280, w2: 180, p2: 15 },
   { type: 'enemy', t: 300, x: 80, w: 320, h: 80, hp: 8 }
 ];
 
 const MAIN_TIMELINE = [
-  // 시작 파워 10
-  { type: 'gate', t: 40, x1: 20, w1: 100, p1: 12, x2: 130, w2: 330, p2: 5, autoTarget: 295 }, // 자동:+5 -> 15
-  { type: 'enemy', t: 110, x: 300, w: 100, h: 50, hp: 3 }, // 보조 적: -3 -> 12
-  { type: 'enemy', t: 170, x: 140, w: 200, h: 80, hp: 7 }, // 메인 적: -7 -> 5
-  { type: 'gate', t: 240, x1: 300, w1: 150, p1: 3, x2: 20, w2: 270, p2: 1, autoTarget: 155 }, // 보조 게이트: +1 -> 6
-  { type: 'gate', t: 310, x1: 20, w1: 330, p1: 6, x2: 360, w2: 100, p2: 15, autoTarget: 185 }, // 메인 게이트: +6 -> 12
-  { type: 'enemy', t: 380, x: 40, w: 120, h: 50, hp: 4 }, // 보조 적: -4 -> 8
-  { type: 'enemy', t: 450, x: 100, w: 280, h: 80, hp: 6 }, // 메인 적: -6 -> 2
-  { type: 'gate', t: 520, x1: 200, w1: 260, p1: 4, x2: 20, w2: 170, p2: 2, autoTarget: 105 }, // 보조 게이트: +2 -> 4
-  { type: 'gate', t: 590, x1: 20, w1: 100, p1: 18, x2: 130, w2: 330, p2: 7, autoTarget: 295 }, // 메인 게이트: +7 -> 11
-  { type: 'enemy', t: 660, x: 50, w: 150, h: 60, hp: 5 }, // 보조 적: -5 -> 6
-  { type: 'enemy', t: 740, x: 90, w: 300, h: 100, hp: 14 } // 최종 적: HP 14 vs Power 6 -> 실패!
+  { type: 'gate', t: 40, x1: 20, w1: 100, p1: 12, x2: 130, w2: 330, p2: 5, autoTarget: 295 },
+  { type: 'enemy', t: 110, x: 300, w: 100, h: 50, hp: 3 },
+  { type: 'enemy', t: 170, x: 140, w: 200, h: 80, hp: 7 },
+  { type: 'gate', t: 240, x1: 300, w1: 150, p1: 3, x2: 20, w2: 270, p2: 1, autoTarget: 155 },
+  { type: 'gate', t: 310, x1: 20, w1: 330, p1: 6, x2: 360, w2: 100, p2: 15, autoTarget: 185 },
+  { type: 'enemy', t: 380, x: 40, w: 120, h: 50, hp: 4 },
+  { type: 'enemy', t: 450, x: 100, w: 280, h: 80, hp: 6 },
+  { type: 'gate', t: 520, x1: 200, w1: 260, p1: 4, x2: 20, w2: 170, p2: 2, autoTarget: 105 },
+  { type: 'gate', t: 590, x1: 20, w1: 100, p1: 18, x2: 130, w2: 330, p2: 7, autoTarget: 295 },
+  { type: 'enemy', t: 660, x: 50, w: 150, h: 60, hp: 5 },
+  { type: 'enemy', t: 740, x: 90, w: 300, h: 100, hp: 14 }
 ];
 
 const MicrogateExperiment = () => {
@@ -86,7 +86,7 @@ const MicrogateExperiment = () => {
       const s = Math.random() * speed + 1;
       gameState.current.particles.push({
         x, y, vx: Math.cos(angle) * s, vy: Math.sin(angle) * s,
-        life: 1.0, decay: 0.02 + Math.random() * 0.03, color, size: (2 + Math.random() * size)
+        life: 1.0, decay: 0.015 + Math.random() * 0.02, color, size: (2 + Math.random() * size)
       });
     }
   };
@@ -96,35 +96,32 @@ const MicrogateExperiment = () => {
     
     const state = gameState.current;
     if (result === 'success') {
-      state.resultAnim = { type: rescue && rewind ? 'RESCUED' : 'SUCCESS', t: 1.0 };
-      state.vignette = -1.5; // Stronger brightening glow
-      state.flash = 0.8;
-      state.shake = 5;
-      
-      // Ship breakthrough physics
-      state.ship.vy = -12;
+      state.resultAnim = { type: rescue && rewind ? '성공' : '구출 성공', t: 1.0 };
+      state.vignette = -2.5; 
+      state.flash = 1.0;
+      state.shake = 12;
+      state.ship.vy = -18;
       state.ship.vx = 0;
       
       const particleColor = '#00ffff';
-      spawnParticles(state.ship.x + state.ship.w/2, state.ship.y + state.ship.h/2, 60, particleColor, 12, 5);
+      spawnParticles(state.ship.x + state.ship.w/2, state.ship.y + state.ship.h/2, 100, particleColor, 18, 6);
       
-      // Multiple expanding rings
-      for(let i=0; i<3; i++) {
+      for(let i=0; i<4; i++) {
         setTimeout(() => {
-          state.rings.push({ x: state.ship.x + state.ship.w/2, y: state.ship.y + state.ship.h/2, r: 10, life: 1.0, speed: 8 + i*2 });
-        }, i * 150);
+          state.rings.push({ x: state.ship.x + state.ship.w/2, y: state.ship.y + state.ship.h/2, r: 10, life: 1.0, speed: 12 + i*4, color: i % 2 === 0 ? '#ffffff' : '#00ffff' });
+        }, i * 100);
       }
 
       if (rescue && rewind) {
-        state.failReason = "직접 조작으로 결과를 바꿨습니다!";
+        state.failReason = "구출 성공!";
         setTimeout(() => {
-          spawnParticles(state.ship.x + state.ship.w/2, state.ship.y + state.ship.h/2, 100, '#ffffff', 18, 3);
+          spawnParticles(state.ship.x + state.ship.w/2, state.ship.y + state.ship.h/2, 150, '#ffffff', 25, 4);
           state.flash = 1.0;
-          state.shake = 15;
-          state.vignette = -2.0;
-        }, 400);
+          state.shake = 25;
+          state.vignette = -3.0;
+        }, 300);
       } else {
-        state.failReason = "위험 구간 돌파 성공!";
+        state.failReason = "위험 구간을 돌파했습니다!";
       }
 
       setGameResult(result);
@@ -133,9 +130,7 @@ const MicrogateExperiment = () => {
       state.resultAnim = { type: 'FAILURE', t: 1.0 };
       state.vignette = 1.0;
       setGameResult(result);
-      setTimeout(() => {
-        setGamePhase('ended');
-      }, 800);
+      setTimeout(() => { setGamePhase('ended'); }, 800);
     }
 
     if (stage === STAGES.TUTORIAL_PLAY) {
@@ -150,7 +145,7 @@ const MicrogateExperiment = () => {
       return { ...prev, sessions: newSessions };
     });
     
-    const delay = result === 'success' ? 2800 : 2500;
+    const delay = result === 'success' ? 3500 : 2500;
     setTimeout(() => setStage(STAGES.SESSION_SURVEY), delay);
   }, [sessionStartTime, currentSessionIndex, condition, gamePhase, stage]);
 
@@ -161,7 +156,6 @@ const MicrogateExperiment = () => {
     const ctx = canvas.getContext('2d');
     const { width, height } = canvas;
 
-    // --- Timeline Spawner ---
     if (state.eventIdx < state.timeline.length && state.time >= state.timeline[state.eventIdx].t) {
       const ev = state.timeline[state.eventIdx];
       if (ev.type === 'gate') state.gates.push({ ...ev, y: -120, passed: false });
@@ -171,35 +165,24 @@ const MicrogateExperiment = () => {
 
     const currentSpeed = state.speed * state.slowFactor;
 
-    // Update Particles
     state.particles = state.particles.filter(p => p.life > 0);
-    state.particles.forEach(p => {
-      p.x += p.vx; p.y += p.vy; p.life -= p.decay;
-    });
+    state.particles.forEach(p => { p.x += p.vx; p.y += p.vy; p.life -= p.decay; });
 
-    // Update Rings
     state.rings = state.rings.filter(r => r.life > 0);
-    state.rings.forEach(r => {
-      r.r += r.speed || 5; r.life -= 0.025;
-    });
+    state.rings.forEach(r => { r.r += r.speed || 5; r.life -= 0.02; });
 
-    // Move Background Stars
     state.stars.forEach(s => {
-      const starSpeed = gameResult === 'success' && gamePhase === 'ended' ? currentSpeed * 5 : currentSpeed;
+      const starSpeed = gameResult === 'success' && gamePhase === 'ended' ? currentSpeed * 8 : currentSpeed;
       s.y += starSpeed * s.s * 0.5;
       if (s.y > height) { s.y = -10; s.x = Math.random() * width; }
     });
 
     if (state.ship.isDead) {
-      state.ship.x += state.ship.vx;
-      state.ship.y += state.ship.vy;
-      state.ship.ang += state.ship.av;
+      state.ship.x += state.ship.vx; state.ship.y += state.ship.vy; state.ship.ang += state.ship.av;
       state.ship.vx *= 0.95; state.ship.vy *= 0.95; state.ship.av *= 0.95;
       state.slowFactor = Math.max(0.05, state.slowFactor * 0.9);
     } else if (gameResult === 'success' && gamePhase === 'ended') {
-      state.ship.y += state.ship.vy;
-      state.ship.vy *= 0.98;
-      state.time += 2; // Accelerate grid for speed feel
+      state.ship.y += state.ship.vy; state.ship.vy *= 0.96; state.time += 4;
     }
 
     if ((gamePhase === 'autoplay_fail_watch' || gamePhase === 'rewind_rescue' || gamePhase === 'tutorial_play') && !state.ship.isDead) {
@@ -210,110 +193,73 @@ const MicrogateExperiment = () => {
           state.ship.x += (currentGate.autoTarget - (state.ship.x + state.ship.w/2)) * 0.04;
           state.ship.x += Math.sin(state.time * 0.1) * 0.5;
         }
-
         if (condition === 'rewind') {
-          state.history.push({ 
-            ship: { ...state.ship }, gates: state.gates.map(g => ({ ...g })), 
-            enemies: state.enemies.map(e => ({ ...e })), time: state.time, eventIdx: state.eventIdx
-          });
+          state.history.push({ ship: { ...state.ship }, gates: state.gates.map(g => ({ ...g })), enemies: state.enemies.map(e => ({ ...e })), time: state.time, eventIdx: state.eventIdx });
           if (state.history.length > 500) state.history.shift();
         }
-
         const imminentEnemy = state.enemies.find(e => !e.dead && e.y + e.h > state.ship.y - 80 && e.y < state.ship.y + state.ship.h);
         if (imminentEnemy && state.ship.power < imminentEnemy.hp) {
-          state.slowFactor = Math.max(0.1, state.slowFactor - 0.04);
-          setIsSlowMo(true);
-        } else {
-          state.slowFactor = Math.min(1.0, state.slowFactor + 0.1);
-          setIsSlowMo(false);
-        }
+          state.slowFactor = Math.max(0.1, state.slowFactor - 0.04); setIsSlowMo(true);
+        } else { state.slowFactor = Math.min(1.0, state.slowFactor + 0.1); setIsSlowMo(false); }
       } else {
-        state.time++;
-        state.slowFactor = 1.0;
+        state.time++; state.slowFactor = 1.0;
         if (input.current.mouseX !== null) {
           state.ship.x += (input.current.mouseX - state.ship.w/2 - state.ship.x) * 0.2;
-          if (state.ship.x < 0) state.ship.x = 0;
-          if (state.ship.x > width - state.ship.w) state.ship.x = width - state.ship.w;
+          if (state.ship.x < 0) state.ship.x = 0; if (state.ship.x > width - state.ship.w) state.ship.x = width - state.ship.w;
         }
       }
-
       state.gates.forEach(g => g.y += currentSpeed);
       state.enemies.forEach(e => e.y += currentSpeed);
-
       checkCollisions(state, (reason) => {
-        state.ship.isDead = true;
-        state.ship.vx = (Math.random() - 0.5) * 15;
-        state.ship.vy = (Math.random() * 5 + 5);
-        state.ship.av = (Math.random() - 0.5) * 0.4;
-        state.flash = 0.8;
-        state.shake = 30;
-        state.vignette = 1.0;
-        state.failReason = reason;
-        spawnParticles(state.ship.x + state.ship.w/2, state.ship.y + state.ship.h/2, 30, '#ffcc33', 10, 4); // Sparks
-        spawnParticles(state.ship.x + state.ship.w/2, state.ship.y + state.ship.h/2, 20, '#ff3366', 6, 6);  // Debris
-        
-        if (condition === 'fail' || gamePhase === 'rewind_rescue' || gamePhase === 'tutorial_play') {
-          endSession('fail', 0, gamePhase === 'rewind_rescue', condition === 'rewind');
-        } else {
-          setTimeout(() => {
-            if (gamePhase !== 'ended') {
-              setGamePhase('rewind_watch');
-              setTimeout(() => setGamePhase('rewind_back'), 1000);
-            }
-          }, 800);
-        }
+        state.ship.isDead = true; state.ship.vx = (Math.random() - 0.5) * 15; state.ship.vy = (Math.random() * 5 + 5); state.ship.av = (Math.random() - 0.5) * 0.4;
+        state.flash = 0.8; state.shake = 35; state.vignette = 1.0; state.failReason = reason;
+        spawnParticles(state.ship.x + state.ship.w/2, state.ship.y + state.ship.h/2, 35, '#ffcc33', 12, 4);
+        spawnParticles(state.ship.x + state.ship.w/2, state.ship.y + state.ship.h/2, 25, '#ff3366', 8, 6);
+        if (condition === 'fail' || gamePhase === 'rewind_rescue' || gamePhase === 'tutorial_play') { endSession('fail', 0, gamePhase === 'rewind_rescue', condition === 'rewind'); }
+        else { setTimeout(() => { if (gamePhase !== 'ended') { setGamePhase('rewind_watch'); setTimeout(() => setGamePhase('rewind_back'), 1000); } }, 800); }
       });
-
       if (state.time > 450 && gamePhase === 'tutorial_play') endSession('success', 100, true, false);
       if (state.time > 950 && gamePhase === 'rewind_rescue') endSession('success', 500, true, true);
-
     } else if (gamePhase === 'rewind_back') {
-      if (state.history.length > 0) {
-        for(let i=0; i<15; i++) {
-          if (state.history.length > 0) {
-            const p = state.history.pop();
-            Object.assign(state, p);
-          }
-        }
-      } else { setGamePhase('rewind_rescue'); }
+      if (state.history.length > 0) { for(let i=0; i<15; i++) { if (state.history.length > 0) { const p = state.history.pop(); Object.assign(state, p); } } }
+      else { setGamePhase('rewind_rescue'); }
     }
 
     // --- Rendering ---
     ctx.save();
-    if (state.shake > 0) {
-      ctx.translate((Math.random()-0.5)*state.shake, (Math.random()-0.5)*state.shake);
-      state.shake *= 0.85;
-    }
-
+    if (state.shake > 0) { ctx.translate((Math.random()-0.5)*state.shake, (Math.random()-0.5)*state.shake); state.shake *= 0.85; }
     ctx.fillStyle = '#050a10'; ctx.fillRect(0, 0, width, height);
 
-    // Draw Grid (Reacts to impact/victory)
-    let gridAlpha = state.shake > 10 ? 0.25 : 0.05;
-    if (gameResult === 'success' && gamePhase === 'ended') gridAlpha = 0.15;
+    let gridAlpha = state.shake > 10 ? 0.35 : 0.05;
+    if (gameResult === 'success' && gamePhase === 'ended') gridAlpha = 0.25;
     ctx.strokeStyle = gameResult === 'success' && gamePhase === 'ended' ? `rgba(0, 255, 255, ${gridAlpha})` : `rgba(0, 255, 204, ${gridAlpha})`;
     ctx.lineWidth = 1; ctx.beginPath();
     for (let i = 0; i < width; i += 40) { ctx.moveTo(i, 0); ctx.lineTo(i, height); }
-    const gridY = ((state.time * (state.ship.isDead ? 0.5 : 2)) % 40);
+    const gridY = ((state.time * (state.ship.isDead ? 0.5 : 2.8)) % 40);
     for (let i = gridY; i < height; i += 40) { ctx.moveTo(0, i); ctx.lineTo(width, i); }
     ctx.stroke();
 
-    // Stars
-    ctx.fillStyle = '#fff';
-    state.stars.forEach(s => {
-      ctx.globalAlpha = s.s / 4;
-      ctx.fillRect(s.x, s.y, s.s, s.s);
-    });
+    ctx.fillStyle = '#fff'; state.stars.forEach(s => { ctx.globalAlpha = s.s / 4; ctx.fillRect(s.x, s.y, s.s, s.s); });
     ctx.globalAlpha = 1.0;
 
+    // Gate Rendering (Box/Card style)
     state.gates.forEach(g => {
       if (g.passed) return;
-      ctx.fillStyle = g.p1 > 0 ? 'rgba(0, 255, 204, 0.4)' : 'rgba(255, 50, 50, 0.4)';
-      ctx.fillRect(g.x1, g.y, g.w1, 40);
-      ctx.fillStyle = g.p2 > 0 ? 'rgba(0, 255, 204, 0.4)' : 'rgba(255, 50, 50, 0.4)';
-      ctx.fillRect(g.x2, g.y, g.w2, 40);
-      ctx.fillStyle = '#fff'; ctx.font = 'bold 16px monospace'; ctx.textAlign = 'center';
-      ctx.fillText(g.p1 > 0 ? `+${g.p1}` : g.p1, g.x1 + g.w1/2, g.y + 25);
-      ctx.fillText(g.p2 > 0 ? `+${g.p2}` : g.p2, g.x2 + g.w2/2, g.y + 25);
+      const drawBox = (x, w, power) => {
+        const isPos = power > 0;
+        const color = isPos ? '#00ffcc' : '#ff3366';
+        ctx.fillStyle = isPos ? 'rgba(0, 255, 204, 0.25)' : 'rgba(255, 50, 80, 0.25)';
+        ctx.strokeStyle = color; ctx.lineWidth = 3;
+        // Draw Card Box
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(x, g.y, w, 40, 8); else ctx.rect(x, g.y, w, 40);
+        ctx.fill(); ctx.stroke();
+        // Centered Text
+        ctx.fillStyle = '#fff'; ctx.font = 'bold 18px monospace'; ctx.textAlign = 'center';
+        ctx.fillText(isPos ? `+${power}` : power, x + w/2, g.y + 26);
+      };
+      drawBox(g.x1, g.w1, g.p1);
+      drawBox(g.x2, g.w2, g.p2);
     });
 
     state.enemies.forEach(e => {
@@ -324,158 +270,79 @@ const MicrogateExperiment = () => {
       ctx.fillText(`HP ${e.hp}`, e.x + e.w/2, e.y + e.h/2 + 8);
     });
 
-    // Particles
-    state.particles.forEach(p => {
-      ctx.globalAlpha = p.life;
-      ctx.fillStyle = p.color;
-      ctx.fillRect(p.x, p.y, p.size, p.size);
-    });
+    state.particles.forEach(p => { ctx.globalAlpha = p.life; ctx.fillStyle = p.color; ctx.fillRect(p.x, p.y, p.size, p.size); });
     ctx.globalAlpha = 1.0;
 
-    // Ship
-    ctx.save();
-    ctx.translate(state.ship.x + state.ship.w/2, state.ship.y + state.ship.h/2);
-    ctx.rotate(state.ship.ang);
-    
+    ctx.save(); ctx.translate(state.ship.x + state.ship.w/2, state.ship.y + state.ship.h/2); ctx.rotate(state.ship.ang);
     if (!state.ship.isDead) {
-      // Thruster - intensified on success
       const isVictory = gameResult === 'success' && gamePhase === 'ended';
-      ctx.fillStyle = isVictory ? '#ffffff' : '#00ffff'; 
-      ctx.globalAlpha = isVictory ? 0.8 : (0.5 + Math.random()*0.5);
-      const tLen = isVictory ? 60 : 35;
-      ctx.beginPath(); ctx.moveTo(-12, 20); ctx.lineTo(12, 20); ctx.lineTo(0, tLen); ctx.fill();
-      ctx.globalAlpha = 1.0;
-      ctx.fillStyle = isVictory ? '#99ffff' : '#00ffcc';
-      if (isVictory) {
-        ctx.shadowColor = '#00ffff'; ctx.shadowBlur = 20;
-      }
-    } else {
-      ctx.fillStyle = '#445566'; // Dead color
-    }
-    
+      ctx.fillStyle = isVictory ? '#ffffff' : '#00ffff'; ctx.globalAlpha = isVictory ? 0.9 : (0.5 + Math.random()*0.5);
+      const tLen = isVictory ? 80 : 35; ctx.beginPath(); ctx.moveTo(-12, 20); ctx.lineTo(12, 20); ctx.lineTo(0, tLen); ctx.fill();
+      ctx.globalAlpha = 1.0; ctx.fillStyle = isVictory ? '#aaffff' : '#00ffcc';
+      if (isVictory) { ctx.shadowColor = '#00ffff'; ctx.shadowBlur = 40; }
+    } else { ctx.fillStyle = '#445566'; }
     ctx.beginPath(); ctx.moveTo(0, -20); ctx.lineTo(20, 20); ctx.lineTo(-20, 20); ctx.closePath(); ctx.fill();
-    if (!state.ship.isDead) {
-      ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
-    }
-    ctx.shadowBlur = 0;
-    ctx.restore();
+    if (!state.ship.isDead) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke(); }
+    ctx.shadowBlur = 0; ctx.restore();
 
-    // Power text
     if (!state.ship.isDead) {
-      ctx.fillStyle = '#fff'; ctx.font = 'bold 20px monospace'; ctx.textAlign = 'center';
-      ctx.fillText(state.ship.power, state.ship.x + state.ship.w/2, state.ship.y + state.ship.h + 25);
+      const isVictory = gameResult === 'success' && gamePhase === 'ended';
+      ctx.fillStyle = isVictory ? '#00ffff' : '#ffffff'; ctx.font = 'bold 22px monospace'; ctx.textAlign = 'center';
+      if (isVictory) { ctx.shadowColor = '#00ffff'; ctx.shadowBlur = 15; }
+      ctx.fillText(state.ship.power, state.ship.x + state.ship.w/2, state.ship.y + state.ship.h + 28);
+      ctx.shadowBlur = 0;
     }
 
-    // Rings
-    state.rings.forEach(r => {
-      ctx.globalAlpha = r.life;
-      ctx.strokeStyle = isVictory ? '#ffffff' : '#00ffff'; ctx.lineWidth = 3;
-      ctx.beginPath(); ctx.arc(r.x, r.y, r.r, 0, Math.PI*2); ctx.stroke();
-    });
+    state.rings.forEach(r => { ctx.globalAlpha = r.life; ctx.strokeStyle = r.color || '#ffffff'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(r.x, r.y, r.r, 0, Math.PI*2); ctx.stroke(); });
     ctx.globalAlpha = 1.0;
-
     ctx.restore();
 
-    // --- Overlay Effects ---
-    
-    if (state.flash > 0) {
-      const flashColor = gameResult === 'success' ? '200, 255, 240' : '255, 255, 255';
-      ctx.fillStyle = `rgba(${flashColor}, ${state.flash})`;
-      ctx.fillRect(0, 0, width, height);
-      state.flash -= 0.05;
-    }
+    if (state.flash > 0) { const flashColor = gameResult === 'success' ? '200, 255, 255' : '255, 255, 255'; ctx.fillStyle = `rgba(${flashColor}, ${state.flash})`; ctx.fillRect(0, 0, width, height); state.flash -= 0.04; }
 
     if (state.vignette !== 0) {
-      const grad = ctx.createRadialGradient(width/2, height/2, width/4, width/2, height/2, width*0.9);
-      if (state.vignette > 0) { // Dark Vignette (Failure)
-        grad.addColorStop(0, 'rgba(0, 0, 0, 0)');
-        grad.addColorStop(1, `rgba(100, 0, 10, ${state.vignette * 0.8})`);
-      } else { // Light Glow (Success)
-        grad.addColorStop(0, `rgba(0, 255, 255, ${Math.abs(state.vignette) * 0.2})`);
-        grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-      }
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, width, height);
-      if (gamePhase !== 'ended' || gameResult === 'success') {
-        state.vignette *= 0.98;
-        if (Math.abs(state.vignette) < 0.01) state.vignette = 0;
-      }
+      const grad = ctx.createRadialGradient(width/2, height/2, width*0.05, width/2, height/2, width*0.95);
+      if (state.vignette > 0) { grad.addColorStop(0, 'rgba(0, 0, 0, 0)'); grad.addColorStop(1, `rgba(100, 0, 10, ${state.vignette * 0.85})`); }
+      else { grad.addColorStop(0, `rgba(0, 255, 255, ${Math.abs(state.vignette) * 0.3})`); grad.addColorStop(1, 'rgba(0, 0, 0, 0)'); }
+      ctx.fillStyle = grad; ctx.fillRect(0, 0, width, height);
+      if (gamePhase !== 'ended' || gameResult === 'success') { state.vignette *= 0.97; if (Math.abs(state.vignette) < 0.01) state.vignette = 0; }
     }
 
     if (state.resultAnim.type) {
-      const s = state.resultAnim;
-      const progress = Math.min(1, (1 - s.t) * 5);
-      const isSuccess = s.type === 'SUCCESS' || s.type === 'RESCUED';
-      
-      // Pop-up bounce effect for success
-      const bounce = isSuccess ? Math.sin(progress * Math.PI) * 0.1 : 0;
-      const scale = (0.4 + progress * 0.6) + bounce;
+      const s = state.resultAnim; const progress = Math.min(1, (1 - s.t) * 5); const isSuccess = s.type !== 'FAILURE';
+      const bounce = isSuccess ? Math.sin(progress * Math.PI) * 0.2 : 0; const scale = (0.4 + progress * 0.6) + bounce;
       const alpha = Math.min(1, progress * 3);
-      
-      ctx.save();
-      ctx.translate(width/2, height/2 - 60);
-      ctx.scale(scale, scale);
-      ctx.globalAlpha = alpha;
-      
-      ctx.fillStyle = isSuccess ? '#00ffff' : '#ff3366';
-      ctx.shadowColor = isSuccess ? 'rgba(0, 255, 255, 1.0)' : 'rgba(255, 0, 50, 0.8)';
-      ctx.shadowBlur = isSuccess ? 50 : 30;
-      ctx.font = 'bold 94px sans-serif'; ctx.textAlign = 'center';
-      ctx.fillText(s.type, 0, 0);
-      
+      ctx.save(); ctx.translate(width/2, height/2 - 80); ctx.scale(scale, scale); ctx.globalAlpha = alpha;
+      ctx.fillStyle = isSuccess ? '#00ffff' : '#ff3366'; ctx.shadowColor = isSuccess ? 'rgba(0, 255, 255, 1.0)' : 'rgba(255, 0, 50, 0.8)';
+      ctx.shadowBlur = isSuccess ? 70 : 35; ctx.font = 'bold 98px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(s.type, 0, 0);
       if (state.failReason) {
-        ctx.fillStyle = '#fff'; ctx.font = 'bold 28px monospace'; ctx.shadowBlur = 0;
-        ctx.fillText(state.failReason, 0, 80);
-        
-        if (isSuccess) {
-          ctx.font = 'bold 18px monospace'; ctx.fillStyle = '#00ffff';
-          ctx.fillText(s.type === 'RESCUED' ? "▶ USER INTERVENTION SUCCESS" : "▶ MISSION COMPLETE", 0, 120);
-        } else {
-          ctx.font = '18px monospace'; ctx.fillStyle = '#94a3b8';
-          ctx.fillText("전투에 필요한 파워가 모자랐습니다", 0, 110);
-        }
+        ctx.fillStyle = '#fff'; ctx.font = 'bold 32px monospace'; ctx.shadowBlur = 0; ctx.fillText(state.failReason, 0, 100);
+        if (isSuccess) { ctx.font = 'bold 22px monospace'; ctx.fillStyle = '#00ffff'; ctx.fillText("▶ 결과를 성공적으로 바꿨습니다", 0, 145); }
+        else { ctx.font = '18px monospace'; ctx.fillStyle = '#94a3b8'; ctx.fillText("전투에 필요한 파워가 모자랐습니다", 0, 145); }
       }
-      
-      ctx.restore();
-      if (s.t > 0) s.t -= isSuccess ? 0.006 : 0.01; 
+      ctx.restore(); if (s.t > 0) s.t -= isSuccess ? 0.004 : 0.01; 
     }
 
     if (gamePhase === 'rewind_watch' || gamePhase === 'rewind_back') {
-      ctx.fillStyle = '#fff'; ctx.font = 'bold 40px monospace'; ctx.textAlign = 'center';
-      ctx.shadowColor = 'rgba(255, 50, 80, 0.8)'; ctx.shadowBlur = 20;
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 40px monospace'; ctx.textAlign = 'center'; ctx.shadowColor = 'rgba(255, 50, 80, 0.8)'; ctx.shadowBlur = 20;
       ctx.fillText(gamePhase === 'rewind_watch' ? 'COLLISION!' : '◀◀ REWIND', width/2, height/2 + 80);
       ctx.shadowBlur = 0;
     } 
     
-    if (gamePhase === 'ended') {
-      ctx.fillStyle = gameResult === 'success' ? 'rgba(0, 40, 30, 0.2)' : 'rgba(0, 0, 0, 0.4)';
-      ctx.fillRect(0, 0, width, height);
-    }
+    if (gamePhase === 'ended') { ctx.fillStyle = gameResult === 'success' ? 'rgba(0, 40, 30, 0.15)' : 'rgba(0, 0, 0, 0.45)'; ctx.fillRect(0, 0, width, height); }
   }, [gamePhase, condition, endSession, gameResult, isSlowMo, stage]);
 
   const checkCollisions = (state, onFail) => {
     const s = state.ship;
     state.gates.forEach(g => {
       if (!g.passed && g.y + 40 > s.y && g.y < s.y + s.h) {
-        if (s.x + s.w/2 > g.x1 && s.x + s.w/2 < g.x1 + g.w1) { 
-          state.ship.power += g.p1; g.passed = true; 
-          spawnParticles(s.x + s.w/2, g.y + 20, 10, g.p1 > 0 ? '#00ffcc' : '#ff3366', 3);
-        }
-        else if (s.x + s.w/2 > g.x2 && s.x + s.w/2 < g.x2 + g.w2) { 
-          state.ship.power += g.p2; g.passed = true; 
-          spawnParticles(s.x + s.w/2, g.y + 20, 10, g.p2 > 0 ? '#00ffcc' : '#ff3366', 3);
-        }
+        if (s.x + s.w/2 > g.x1 && s.x + s.w/2 < g.x1 + g.w1) { state.ship.power += g.p1; g.passed = true; spawnParticles(s.x + s.w/2, g.y + 20, 15, g.p1 > 0 ? '#00ffcc' : '#ff3366', 4); }
+        else if (s.x + s.w/2 > g.x2 && s.x + s.w/2 < g.x2 + g.w2) { state.ship.power += g.p2; g.passed = true; spawnParticles(s.x + s.w/2, g.y + 20, 15, g.p2 > 0 ? '#00ffcc' : '#ff3366', 4); }
         if (state.ship.power <= 0) onFail("POWER DEPLETED");
       }
     });
     state.enemies.forEach(e => {
       if (!e.dead && s.x < e.x + e.w && s.x + s.w > e.x && s.y < e.y + e.h && s.y + s.h > e.y) {
-        if (state.ship.power >= e.hp) { 
-          state.ship.power -= e.hp; e.dead = true; 
-          state.shake = 10;
-          state.flash = 0.3;
-          spawnParticles(e.x + e.w/2, e.y + e.h/2, 15, '#ff3366', 6);
-        }
+        if (state.ship.power >= e.hp) { state.ship.power -= e.hp; e.dead = true; state.shake = 12; state.flash = 0.35; spawnParticles(e.x + e.w/2, e.y + e.h/2, 20, '#ff3366', 7); }
         else onFail(`HP ${e.hp} > POWER ${state.ship.power}`);
       }
     });
@@ -483,11 +350,11 @@ const MicrogateExperiment = () => {
 
   useEffect(() => {
     if (stage === STAGES.SESSION_PLAY || stage === STAGES.TUTORIAL_PLAY) {
-      const loop = () => { if (gamePhase !== 'ended') updateGame(); reqRef.current = requestAnimationFrame(loop); };
+      const loop = () => { if (gamePhase !== 'ended' || gameResult === 'success') updateGame(); reqRef.current = requestAnimationFrame(loop); };
       reqRef.current = requestAnimationFrame(loop);
       return () => cancelAnimationFrame(reqRef.current);
     }
-  }, [stage, gamePhase, updateGame]);
+  }, [stage, gamePhase, updateGame, gameResult]);
 
   useEffect(() => {
     if ((stage !== STAGES.SESSION_PLAY && stage !== STAGES.TUTORIAL_PLAY) || gamePhase === 'autoplay_fail_watch' || gamePhase === 'ended') return;
@@ -512,52 +379,22 @@ const MicrogateExperiment = () => {
           </label>
         ))}
       </div>
-      <div className="likert-text">
-        <span>1 전혀 아니다</span>
-        <span>4 보통이다</span>
-        <span>7 매우 그렇다</span>
-      </div>
+      <div className="likert-text"><span>1 전혀 아니다</span><span>4 보통이다</span><span>7 매우 그렇다</span></div>
     </div>
   );
 
   const exportCSV = () => {
-    // ID 포맷팅 (숫자만 있으면 P000 형식으로, 아니면 그대로)
     const rawId = log.participantId;
     const formattedId = /^\d+$/.test(rawId) ? `P${rawId.padStart(3, '0')}` : rawId;
-
-    const headers = [
-      "participantId", "session", "condition", "result", "durationMs", 
-      "q1_interesting", "q2_agency", "q3_betterThanFail", "q4_wantToPlay", "q5_schadenfreude",
-      "final_attractive", "final_install", "final_reason"
-    ];
-
+    const headers = ["participantId", "session", "condition", "result", "durationMs", "q1_interesting", "q2_agency", "q3_betterThanFail", "q4_wantToPlay", "q5_schadenfreude", "final_attractive", "final_install", "final_reason"];
     let rows = log.sessions.map(s => {
-      // 결과 상태 명확화
       let detailedResult = s.result;
       if (s.condition === 'fail') detailedResult = 'scripted_fail';
-      else if (s.condition === 'rewind') {
-        detailedResult = s.result === 'success' ? 'rescue_success' : 'rescue_fail';
-      }
-
-      return [
-        formattedId,
-        s.sessionIndex,
-        s.condition,
-        detailedResult,
-        s.durationMs,
-        s.survey.interesting,
-        s.survey.agency,
-        s.survey.betterThanFail,
-        s.survey.wantToPlay,
-        s.survey.schadenfreude,
-        log.finalSurvey.mostAttractive || "",
-        log.finalSurvey.mostWantToInstall || "",
-        `"${(log.finalSurvey.reason || "").replace(/"/g, '""')}"` // CSV 쉼표/따옴표 처리
-      ];
+      else if (s.condition === 'rewind') detailedResult = s.result === 'success' ? 'rescue_success' : 'rescue_fail';
+      return [formattedId, s.sessionIndex, s.condition, detailedResult, s.durationMs, s.survey.interesting, s.survey.agency, s.survey.betterThanFail, s.survey.wantToPlay, s.survey.schadenfreude, log.finalSurvey.mostAttractive || "", log.finalSurvey.mostWantToInstall || "", `"${(log.finalSurvey.reason || "").replace(/"/g, '""')}"`];
     });
-
     const csvContent = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
-    const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' }); // Excel 한글 깨짐 방지 BOM 추가
+    const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = `${formattedId}_full_data.csv`; a.click();
   };
@@ -571,12 +408,8 @@ const MicrogateExperiment = () => {
           <div className="intro-description">
             <p>본 프로토타입은 모바일 게임의 2가지 인터랙티브 광고 형식을 비교합니다.</p>
             <p>총 2개의 세션을 체험하며, 각 세션 종료 후 설문에 응답하게 됩니다.</p>
-            <p className="privacy-note">※ 모든 데이터는 로컬에만 저장되며 외부로 전송되지 않습니다.</p>
           </div>
-          <div className="input-group">
-            <label>참가자 ID</label>
-            <input type="text" placeholder="P001" value={pidInput} onChange={e => setPidInput(e.target.value)} />
-          </div>
+          <div className="input-group"><label>참가자 ID</label><input type="text" placeholder="P001" value={pidInput} onChange={e => setPidInput(e.target.value)} /></div>
           <button className="btn primary" onClick={handleStartIntro}>연구 시작</button>
         </div>
       )}
@@ -586,14 +419,8 @@ const MicrogateExperiment = () => {
           <h2>실험 안내</h2>
           <div className="guide-content">
             <p>이번 연구에서 참가자는 2가지 광고 형식을 체험하게 됩니다.</p>
-            <div className="guide-item">
-              <strong>형식 1: 실패 광고</strong>
-              <p>게임 플레이를 시청만 하는 조건입니다.</p>
-            </div>
-            <div className="guide-item">
-              <strong>형식 2: 리와인드 구출</strong>
-              <p>실패 장면을 본 뒤, 되감기 시점부터 직접 조작하여 결과를 바꾸는 조건입니다.</p>
-            </div>
+            <div className="guide-item"><strong>형식 1: 실패 광고</strong><p>실패하는 장면을 보기만 하는 형식입니다.</p></div>
+            <div className="guide-item"><strong>형식 2: 개입형 실패 광고</strong><p>실패 장면을 본 뒤, 되감기 후 직접 개입하는 형식입니다.</p></div>
             <p>본 실험에 앞서 조작법을 익히기 위한 튜토리얼을 진행합니다.</p>
           </div>
           <button className="btn primary" onClick={() => { initGame(true); setStage(STAGES.TUTORIAL_PLAY); }}>튜토리얼 시작</button>
@@ -614,10 +441,10 @@ const MicrogateExperiment = () => {
             {condition === 'fail' ? (
               <><h3>[ 형식 1: 실패 광고 ]</h3><p>이번 조건은 조작 없이 <strong>보기만</strong> 하시면 됩니다.</p></>
             ) : (
-              <><h3>[ 형식 2: 리와인드 구출 ]</h3><p>실패 장면 후 <strong>직접 조작하여 구출</strong>하십시오.</p></>
+              <><h3>[ 형식 2: 개입형 실패 광고 ]</h3><p>실패 장면 후 되감기 시점부터 <strong>직접 개입해 결과를 바꾸십시오.</strong></p></>
             )}
           </div>
-          <button className="btn primary" onClick={() => { initGame(false); setSessionStartTime(Date.now()); setStage(STAGES.SESSION_PLAY); }}>시작</button>
+          <button className="btn primary" onClick={() => { initGame(false); setSessionStartTime(Date.now()); setSessionSurvey(EMPTY_SURVEY); setStage(STAGES.SESSION_PLAY); }}>시작</button>
         </div>
       )}
 
@@ -637,16 +464,8 @@ const MicrogateExperiment = () => {
           </div>
           <button className="btn primary" onClick={() => {
             if (Object.values(sessionSurvey).some(v => v === 0)) return alert("모든 문항에 응답해 주세요.");
-            setLog(prev => { 
-              const ns = [...prev.sessions]; 
-              ns[currentSessionIndex].survey = { ...sessionSurvey }; 
-              return { ...prev, sessions: ns }; 
-            });
-            if (currentSessionIndex + 1 < CONDITION_ORDER.length) { 
-              setCurrentSessionIndex(prev => prev + 1); 
-              setSessionSurvey(EMPTY_SURVEY);
-              setStage(STAGES.SESSION_INTRO); 
-            }
+            setLog(prev => { const ns = [...prev.sessions]; ns[currentSessionIndex].survey = { ...sessionSurvey }; return { ...prev, sessions: ns }; });
+            if (currentSessionIndex + 1 < CONDITION_ORDER.length) { setCurrentSessionIndex(prev => prev + 1); setSessionSurvey(EMPTY_SURVEY); setStage(STAGES.SESSION_INTRO); }
             else setStage(STAGES.FINAL_SURVEY);
           }}>제출</button>
         </div>
@@ -656,26 +475,9 @@ const MicrogateExperiment = () => {
         <div className="card survey-card">
           <h2>최종 비교 설문</h2>
           <div className="survey-list">
-            <div className="survey-q">
-              <p>1. 어느 형식이 가장 매력적이었나요?</p>
-              <select value={finalSurvey.mostAttractive} onChange={e => setFinalSurvey(p => ({ ...p, mostAttractive: e.target.value }))}>
-                <option value="">선택</option>
-                <option value="fail">실패 광고</option>
-                <option value="rewind">리와인드 구출</option>
-              </select>
-            </div>
-            <div className="survey-q">
-              <p>2. 어느 형식이 게임 설치 의향을 가장 높였나요?</p>
-              <select value={finalSurvey.mostWantToInstall} onChange={e => setFinalSurvey(p => ({ ...p, mostWantToInstall: e.target.value }))}>
-                <option value="">선택</option>
-                <option value="fail">실패 광고</option>
-                <option value="rewind">리와인드 구출</option>
-              </select>
-            </div>
-            <div className="survey-q">
-              <p>3. 이유가 있다면? (선택사항)</p>
-              <textarea placeholder="자유롭게 입력해 주세요." value={finalSurvey.reason} onChange={e => setFinalSurvey(p => ({ ...p, reason: e.target.value }))} style={{height:'100px'}}></textarea>
-            </div>
+            <div className="survey-q"><p>1. 어느 형식이 가장 매력적이었나요?</p><select value={finalSurvey.mostAttractive} onChange={e => setFinalSurvey(p => ({ ...p, mostAttractive: e.target.value }))}><option value="">선택</option><option value="fail">실패 광고</option><option value="rewind">개입형 실패 광고</option></select></div>
+            <div className="survey-q"><p>2. 어느 형식이 게임 설치 의향을 가장 높였나요?</p><select value={finalSurvey.mostWantToInstall} onChange={e => setFinalSurvey(p => ({ ...p, mostWantToInstall: e.target.value }))}><option value="">선택</option><option value="fail">실패 광고</option><option value="rewind">개입형 실패 광고</option></select></div>
+            <div className="survey-q"><p>3. 이유가 있다면? (선택사항)</p><textarea placeholder="자유롭게 입력해 주세요." value={finalSurvey.reason} onChange={e => setFinalSurvey(p => ({ ...p, reason: e.target.value }))} style={{height:'100px'}}></textarea></div>
           </div>
           <button className="btn primary" onClick={() => {
             if (!finalSurvey.mostAttractive || !finalSurvey.mostWantToInstall) return alert("필수 항목을 선택해 주세요.");
@@ -689,11 +491,7 @@ const MicrogateExperiment = () => {
           <h2>실험 완료</h2>
           <p style={{textAlign:'center', marginBottom:'20px'}}>참여해주셔서 감사합니다.</p>
           <div className="btn-group">
-            <button className="btn outline" onClick={() => {
-              const blob = new Blob([JSON.stringify(log, null, 2)], { type: 'application/json' });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a'); a.href = url; a.download = `${log.participantId}_data.json`; a.click();
-            }}>JSON 저장</button>
+            <button className="btn outline" onClick={() => { const blob = new Blob([JSON.stringify(log, null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `${log.participantId}_data.json`; a.click(); }}>JSON 저장</button>
             <button className="btn primary" onClick={exportCSV}>CSV 저장</button>
           </div>
         </div>
