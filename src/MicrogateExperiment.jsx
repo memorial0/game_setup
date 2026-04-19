@@ -92,7 +92,7 @@ const STAGES = {
   COMPLETION: 'completion'
 };
 
-const CONDITION_ORDER = ['fail', 'rewind'];
+const CONDITION_ORDER = ['rewind', 'fail'];
 const EMPTY_SURVEY = { interesting: 0, agency: 0, betterThanFail: 0, wantToPlay: 0, schadenfreude: 0 };
 
 // --- 타임라인 데이터 ---
@@ -497,8 +497,8 @@ const MicrogateExperiment = () => {
           <h2>실험 안내</h2>
           <div className="guide-content">
             <p>이번 연구에서 참가자는 2가지 광고 형식을 체험하게 됩니다.</p>
-            <div className="guide-item"><strong>형식 1: 실패 광고</strong><p>실패하는 장면을 보기만 하는 형식입니다.</p></div>
-            <div className="guide-item"><strong>형식 2: 개입형 실패 광고</strong><p>실패 장면을 본 뒤, 되감기 후 직접 개입하는 형식입니다.</p></div>
+            <div className="guide-item"><strong>형식 1: 개입형 실패 광고</strong><p>실패 장면을 본 뒤, 되감기 후 직접 개입하는 형식입니다.</p></div>
+            <div className="guide-item"><strong>형식 2: 실패 광고</strong><p>실패하는 장면을 보기만 하는 형식입니다.</p></div>
             <p>본 실험에 앞서 조작법을 익히기 위한 튜토리얼을 진행합니다.</p>
           </div>
           <button className="btn primary" onClick={() => { soundManager.playClick(); initGame(true); setStage(STAGES.TUTORIAL_PLAY); }}>튜토리얼 시작</button>
@@ -516,10 +516,10 @@ const MicrogateExperiment = () => {
         <div className="card intro-card">
           <h2>세션 {currentSessionIndex + 1} / {CONDITION_ORDER.length}</h2>
           <div className="cond-display">
-            {condition === 'fail' ? (
-              <><h3>[ 형식 1: 실패 광고 ]</h3><p>이번 조건은 조작 없이 <strong>보기만</strong> 하시면 됩니다.</p></>
+            {condition === 'rewind' ? (
+              <><h3>[ 형식 1: 개입형 실패 광고 ]</h3><p>실패 장면 후 되감기 시점부터 <strong>직접 개입해 결과를 바꾸십시오.</strong></p></>
             ) : (
-              <><h3>[ 형식 2: 개입형 실패 광고 ]</h3><p>실패 장면 후 되감기 시점부터 <strong>직접 개입해 결과를 바꾸십시오.</strong></p></>
+              <><h3>[ 형식 2: 실패 광고 ]</h3><p>이번 조건은 조작 없이 <strong>보기만</strong> 하시면 됩니다.</p></>
             )}
           </div>
           <button className="btn primary" onClick={() => { soundManager.playClick(); initGame(false); setSessionStartTime(Date.now()); setSessionSurvey(EMPTY_SURVEY); setStage(STAGES.SESSION_PLAY); }}>시작</button>
@@ -554,8 +554,8 @@ const MicrogateExperiment = () => {
         <div className="card survey-card">
           <h2>최종 비교 설문</h2>
           <div className="survey-list">
-            <div className="survey-q"><p>1. 어느 형식이 가장 매력적이었나요?</p><select value={finalSurvey.mostAttractive} onChange={e => setFinalSurvey(p => ({ ...p, mostAttractive: e.target.value }))}><option value="">선택</option><option value="fail">실패 광고</option><option value="rewind">개입형 실패 광고</option></select></div>
-            <div className="survey-q"><p>2. 어느 형식이 게임 설치 의향을 가장 높였나요?</p><select value={finalSurvey.mostWantToInstall} onChange={e => setFinalSurvey(p => ({ ...p, mostWantToInstall: e.target.value }))}><option value="">선택</option><option value="fail">실패 광고</option><option value="rewind">개입형 실패 광고</option></select></div>
+            <div className="survey-q"><p>1. 어느 형식이 가장 매력적이었나요?</p><select value={finalSurvey.mostAttractive} onChange={e => setFinalSurvey(p => ({ ...p, mostAttractive: e.target.value }))}><option value="">선택</option><option value="rewind">개입형 실패 광고</option><option value="fail">실패 광고</option></select></div>
+            <div className="survey-q"><p>2. 어느 형식이 게임 설치 의향을 가장 높였나요?</p><select value={finalSurvey.mostWantToInstall} onChange={e => setFinalSurvey(p => ({ ...p, mostWantToInstall: e.target.value }))}><option value="">선택</option><option value="rewind">개입형 실패 광고</option><option value="fail">실패 광고</option></select></div>
             <div className="survey-q"><p>3. 이유가 있다면? (선택사항)</p><textarea placeholder="자유롭게 입력해 주세요." value={finalSurvey.reason} onChange={e => setFinalSurvey(p => ({ ...p, reason: e.target.value }))} style={{height:'100px'}}></textarea></div>
           </div>
           <button className="btn primary" onClick={() => {
